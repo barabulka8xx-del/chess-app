@@ -1,0 +1,195 @@
+name: Shipit Cloud Build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Comma-separated targets: apk,pip,pages"
+        required: false
+        default: "apk,pip,pages"
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has_python: ${{ steps.check.outputs.has_python }}
+      has_web: ${{ steps.check.outputs.has_web }}
+      entry: ${{ steps.check.outputs.entry }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect project
+        id: check
+        run: |
+          if ls *.py 1> /dev/null 2>&1 || [ -f requirements.txt ] || [ -f pyproject.toml ] || [ -f buildozer.spec ]; then
+            echo "has_python=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_python=false" >> $GITHUB_OUTPUT
+          fi
+          if [ -f index.html ] || [ -d static ] || [ -d public ]; then
+            echo "has_web=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_web=false" >> $GITHUB_OUTPUT
+          fi
+          ENTRY="main.py"
+          echo "entry=$ENTRY" >> $GITHUB_OUTPUT
+          echo "Detected entry: $ENTRY"
+
+  build-wheel:
+    needs: detect
+    if: needs.detect.outputs.has_python == 'true' && contains(github.event.inputs.targets || 'apk,pip,pages', 'pip')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: pip install build twine
+      - name: Build wheel
+        run: |
+          if [ -f pyproject.toml ] || [ -f setup.py ]; then
+            python -m build --wheel --outdir dist/
+          else
+            mkdir -p dist
+            echo "No packaging metadata — add pyproject.toml for a real wheel"
+          fi
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+          if-no-files-found: ignore
+      - name: Publish to PyPI (optional)
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          if [ -z "${{ secrets.PYPI_TOKEN }}" ]; then
+            echo "No PYPI_TOKEN secret — skip upload"
+            exit 0
+          fi
+          if ls dist/*.whl 1> /dev/null 2>&1; then
+            twine upload dist/*.whl --skip-existing
+          fi
+
+  build-apk:
+    needs: detect
+    if: needs.detect.outputs.has_python == 'true' && contains(github.event.inputs.targets || 'apk,pip,pages', 'apk')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure buildozer.spec exists
+        run: |
+          if [ ! -f buildozer.spec ]; then
+            echo "ERROR: buildozer.spec missing. Re-run shipit locally so it generates one."
+            exit 1
+          fi
+          echo "=== buildozer.spec (head) ==="
+          head -40 buildozer.spec
+          ls -la *.py 2>/dev/null | head -20 || true
+
+      - name: Build APK with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer -v android debug
+          workdir: .
+          buildozer_version: stable
+
+      - name: Show APK outputs
+        if: always()
+        run: |
+          echo "=== bin/ ==="
+          ls -la bin/ 2>/dev/null || echo "(no bin yet)"
+          find . -name "*.apk" 2>/dev/null || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: |
+            bin/*.apk
+          if-no-files-found: warn
+
+      - name: Create GitHub Release with APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: shipit-${{ github.run_number }}
+          name: Shipit Build #${{ github.run_number }}
+          files: bin/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-pages:
+    needs: detect
+    if: (needs.detect.outputs.has_web == 'true' || needs.detect.outputs.has_python == 'true') && contains(github.event.inputs.targets || 'apk,pip,pages', 'pages')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site
+          if [ -f index.html ]; then
+            cp -r . _site/ 2>/dev/null || true
+            rm -rf _site/.git _site/.github _site/__pycache__ _site/venv _site/.venv _site/dist _site/bin _site/.buildozer 2>/dev/null || true
+          else
+            cat > _site/index.html << 'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Shipped with Shipit OS</title>
+            <style>
+              body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3;
+                     display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+              .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+                       padding: 2rem 3rem; text-align: center; max-width: 480px; }
+              h1 { margin: 0 0 0.5rem; font-size: 1.75rem; }
+              p { color: #8b949e; margin: 0.5rem 0 1.5rem; }
+              a { color: #58a6ff; text-decoration: none; }
+              .badge { display: inline-block; background: #238636; color: white;
+                        padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.85rem; margin-bottom: 1rem; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">Shipit OS</div>
+              <h1>Project Shipped</h1>
+              <p>This site was auto-generated by <strong>shipit-os</strong>.<br>
+              Add an <code>index.html</code> to customize it.</p>
+              <p><a href="https://github.com/${{ github.repository }}">View on GitHub →</a></p>
+            </div>
+          </body>
+          </html>
+          HTML
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

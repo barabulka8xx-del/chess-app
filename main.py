@@ -1,0 +1,587 @@
+import os
+import json
+import random
+import threading
+import hashlib
+import io
+import wave
+import struct
+import math
+import time
+
+from kivy.app import App
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.clock import Clock
+from kivy.core.audio import SoundLoader
+from kivy.properties import ListProperty, StringProperty, BooleanProperty
+from kivy.metrics import dp
+
+# ================== ЛОГИКА ШАХМАТ ==================
+KNIGHT_OFF = [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]
+ORTHO = [(-1,0),(1,0),(0,-1),(0,1)]
+DIAG  = [(-1,-1),(-1,1),(1,-1),(1,1)]
+
+def inb(r, c): return 0 <= r < 8 and 0 <= c < 8
+
+def start_state():
+    return {
+        'board': [
+            ['r','n','b','q','k','b','n','r'], ['p']*8,
+            ['.']*8, ['.']*8, ['.']*8, ['.']*8,
+            ['P']*8, ['R','N','B','Q','K','B','N','R'],
+        ],
+        'turn': 'w', 'castle_wk': True, 'castle_wq': True,
+        'castle_bk': True, 'castle_bq': True, 'ep': None, 'halfmove': 0,
+    }
+
+def copy_state(s):
+    return {
+        'board': [row[:] for row in s['board']], 'turn': s['turn'],
+        'castle_wk': s['castle_wk'], 'castle_wq': s['castle_wq'],
+        'castle_bk': s['castle_bk'], 'castle_bq': s['castle_bq'],
+        'ep': s['ep'], 'halfmove': s['halfmove'],
+    }
+
+def is_attacked(b, r, c, by_white):
+    for dr, dc in KNIGHT_OFF:
+        nr, nc = r+dr, c+dc
+        if inb(nr,nc):
+            p = b[nr][nc]
+            if by_white and p=='N': return True
+            if not by_white and p=='n': return True
+    if by_white:
+        for dc in (-1,1):
+            nr, nc = r+1, c+dc
+            if inb(nr,nc) and b[nr][nc]=='P': return True
+    else:
+        for dc in (-1,1):
+            nr, nc = r-1, c+dc
+            if inb(nr,nc) and b[nr][nc]=='p': return True
+    for dr, dc in ORTHO:
+        nr, nc = r+dr, c+dc
+        while inb(nr,nc):
+            p = b[nr][nc]
+            if p != '.':
+                if by_white and p in 'RQ': return True
+                if not by_white and p in 'rq': return True
+                break
+            nr += dr; nc += dc
+    for dr, dc in DIAG:
+        nr, nc = r+dr, c+dc
+        while inb(nr,nc):
+            p = b[nr][nc]
+            if p != '.':
+                if by_white and p in 'BQ': return True
+                if not by_white and p in 'bq': return True
+                break
+            nr += dr; nc += dc
+    for dr in (-1,0,1):
+        for dc in (-1,0,1):
+            if dr==0 and dc==0: continue
+            nr, nc = r+dr, c+dc
+            if inb(nr,nc):
+                p = b[nr][nc]
+                if by_white and p=='K': return True
+                if not by_white and p=='k': return True
+    return False
+
+def find_king(b, color):
+    k = 'K' if color=='w' else 'k'
+    for r in range(8):
+        for c in range(8):
+            if b[r][c] == k: return (r,c)
+    return None
+
+def in_check(s, color):
+    kp = find_king(s['board'], color)
+    return kp is not None and is_attacked(s['board'], kp[0], kp[1], color=='b')
+
+def slide(b, r, c, turn, moves, dirs):
+    for dr, dc in dirs:
+        nr, nc = r+dr, c+dc
+        while inb(nr,nc):
+            t = b[nr][nc]
+            if t == '.':
+                moves.append((r,c,nr,nc,None,None))
+            else:
+                if (turn=='w' and t.islower()) or (turn=='b' and t.isupper()):
+                    moves.append((r,c,nr,nc,None,None))
+                break
+            nr += dr; nc += dc
+
+def gen_pawn(b, r, c, turn, moves, ep):
+    if turn=='w': fwd, start, promo = -1, 6, 0
+    else:         fwd, start, promo =  1, 1, 7
+    nr = r + fwd
+    if inb(nr, c) and b[nr][c] == '.':
+        if nr == promo:
+            for pr in 'QRBN': moves.append((r,c,nr,c,pr,None))
+        else:
+            moves.append((r,c,nr,c,None,None))
+            if r == start:
+                nr2 = r + 2*fwd
+                if b[nr2][c] == '.': moves.append((r,c,nr2,c,None,None))
+    for dc in (-1,1):
+        nc = c+dc; nr = r+fwd
+        if not inb(nr,nc): continue
+        t = b[nr][nc]
+        enemy = (turn=='w' and t.islower()) or (turn=='b' and t.isupper())
+        if enemy:
+            if nr == promo:
+                for pr in 'QRBN': moves.append((r,c,nr,nc,pr,None))
+            else:
+                moves.append((r,c,nr,nc,None,None))
+        elif ep and (nr,nc) == ep:
+            moves.append((r,c,nr,nc,None,'ep'))
+
+def gen_pseudo(s):
+    b = s['board']; turn = s['turn']; ep = s['ep']
+    moves = []
+    for r in range(8):
+        for c in range(8):
+            p = b[r][c]
+            if p == '.': continue
+            if turn=='w' and not p.isupper(): continue
+            if turn=='b' and not p.islower(): continue
+            k = p.upper()
+            if k == 'P': gen_pawn(b, r, c, turn, moves, ep)
+            elif k == 'N':
+                for dr, dc in KNIGHT_OFF:
+                    nr, nc = r+dr, c+dc
+                    if inb(nr,nc):
+                        t = b[nr][nc]
+                        if (turn=='w' and (t=='.' or t.islower())) or (turn=='b' and (t=='.' or t.isupper())):
+                            moves.append((r,c,nr,nc,None,None))
+            elif k == 'B': slide(b, r, c, turn, moves, DIAG)
+            elif k == 'R': slide(b, r, c, turn, moves, ORTHO)
+            elif k == 'Q': slide(b, r, c, turn, moves, DIAG+ORTHO)
+            elif k == 'K':
+                for dr in (-1,0,1):
+                    for dc in (-1,0,1):
+                        if dr==0 and dc==0: continue
+                        nr, nc = r+dr, c+dc
+                        if inb(nr,nc):
+                            t = b[nr][nc]
+                            if (turn=='w' and (t=='.' or t.islower())) or (turn=='b' and (t=='.' or t.isupper())):
+                                moves.append((r,c,nr,nc,None,None))
+                if turn=='w' and (r,c)==(7,4):
+                    if s['castle_wk'] and b[7][5]=='.' and b[7][6]=='.':
+                        if not is_attacked(b,7,4,False) and not is_attacked(b,7,5,False) and not is_attacked(b,7,6,False):
+                            moves.append((7,4,7,6,None,'O-O'))
+                    if s['castle_wq'] and b[7][1]=='.' and b[7][2]=='.' and b[7][3]=='.':
+                        if not is_attacked(b,7,4,False) and not is_attacked(b,7,3,False) and not is_attacked(b,7,2,False):
+                            moves.append((7,4,7,2,None,'O-O-O'))
+                if turn=='b' and (r,c)==(0,4):
+                    if s['castle_bk'] and b[0][5]=='.' and b[0][6]=='.':
+                        if not is_attacked(b,0,4,True) and not is_attacked(b,0,5,True) and not is_attacked(b,0,6,True):
+                            moves.append((0,4,0,6,None,'O-O'))
+                    if s['castle_bq'] and b[0][1]=='.' and b[0][2]=='.' and b[0][3]=='.':
+                        if not is_attacked(b,0,4,True) and not is_attacked(b,0,3,True) and not is_attacked(b,0,2,True):
+                            moves.append((0,4,0,2,None,'O-O-O'))
+    return moves
+
+def apply_move(s, m):
+    ns = copy_state(s)
+    b = ns['board']
+    fr, fc, tr, tc, promo, sp = m
+    piece = b[fr][fc]
+    color = 'w' if piece.isupper() else 'b'
+    captured = b[tr][tc]
+    if piece=='K': ns['castle_wk']=ns['castle_wq']=False
+    if piece=='k': ns['castle_bk']=ns['castle_bq']=False
+    if piece=='R':
+        if (fr,fc)==(7,0): ns['castle_wq']=False
+        if (fr,fc)==(7,7): ns['castle_wk']=False
+    if piece=='r':
+        if (fr,fc)==(0,0): ns['castle_bq']=False
+        if (fr,fc)==(0,7): ns['castle_bk']=False
+    if captured=='R':
+        if (tr,tc)==(7,0): ns['castle_wq']=False
+        if (tr,tc)==(7,7): ns['castle_wk']=False
+    if captured=='r':
+        if (tr,tc)==(0,0): ns['castle_bq']=False
+        if (tr,tc)==(0,7): ns['castle_bk']=False
+    ns['ep'] = None
+    if piece.upper()=='P' and abs(tr-fr)==2:
+        ns['ep'] = ((fr+tr)//2, fc)
+    if sp=='ep':
+        if color=='w': b[tr+1][tc] = '.'
+        else: b[tr-1][tc] = '.'
+    b[tr][tc] = promo if promo else piece
+    b[fr][fc] = '.'
+    if sp=='O-O':
+        if color=='w': b[7][5]=b[7][7]; b[7][7]='.'
+        else: b[0][5]=b[0][7]; b[0][7]='.'
+    elif sp=='O-O-O':
+        if color=='w': b[7][3]=b[7][0]; b[7][0]='.'
+        else: b[0][3]=b[0][0]; b[0][0]='.'
+    ns['turn'] = 'b' if color=='w' else 'w'
+    pawn_or_cap = (piece.upper()=='P') or (captured != '.')
+    ns['halfmove'] = 0 if pawn_or_cap else s['halfmove']+1
+    return ns
+
+def legal_moves(s):
+    turn = s['turn']
+    return [m for m in gen_pseudo(s) if not in_check(apply_move(s, m), turn)]
+
+def game_status(s, hist=None):
+    if not legal_moves(s):
+        return 'checkmate' if in_check(s, s['turn']) else 'stalemate'
+    if s['halfmove'] >= 100: return 'draw50'
+    # Для простоты убрал проверку материала и троекратного повторения
+    return None
+
+# ================== БОТ (МИНИМАКС) ==================
+PIECE_VAL = {'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000}
+def evaluate_board(s):
+    score = 0
+    for r in range(8):
+        for c in range(8):
+            p = s['board'][r][c]
+            if p != '.':
+                val = PIECE_VAL[p.lower()]
+                if p.isupper(): score += val
+                else: score -= val
+    return score
+
+def minimax(s, depth, alpha, beta, maximizing):
+    moves = legal_moves(s)
+    if not moves:
+        if in_check(s, s['turn']): return -99999 if maximizing else 99999
+        return 0
+    if depth == 0: return evaluate_board(s)
+    if maximizing:
+        v = -float('inf')
+        for m in moves:
+            v = max(v, minimax(apply_move(s, m), depth-1, alpha, beta, False))
+            alpha = max(alpha, v)
+            if beta <= alpha: break
+        return v
+    else:
+        v = float('inf')
+        for m in moves:
+            v = min(v, minimax(apply_move(s, m), depth-1, alpha, beta, True))
+            beta = min(beta, v)
+            if beta <= alpha: break
+        return v
+
+def get_bot_move(s, difficulty):
+    moves = legal_moves(s)
+    if not moves: return None
+    if difficulty == 1: return random.choice(moves)
+    best_move = moves[0]; best_val = float('inf')
+    for m in moves:
+        val = minimax(apply_move(s, m), 2, -float('inf'), float('inf'), True)
+        val += random.randint(-10, 10)
+        if val < best_val: best_val = val; best_move = m
+    return best_move
+
+# ================== KIVY UI ==================
+class SquareButton(Button):
+    def __init__(self, r, c, **kwargs):
+        super().__init__(**kwargs)
+        self.r = r
+        self.c = c
+        self.font_size = dp(32)
+        self.background_normal = ''
+        self.background_color = (1, 1, 1, 1)
+
+class ChessBoard(GridLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cols = 8
+        self.rows = 8
+        self.squares = {}
+        self.build_board()
+
+    def build_board(self):
+        for r in range(8):
+            for c in range(8):
+                color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
+                btn = SquareButton(r, c, text="", background_color=color)
+                btn.bind(on_release=self.on_square_click)
+                self.squares[(r,c)] = btn
+                self.add_widget(btn)
+
+    def on_square_click(self, instance):
+        app = App.get_running_app()
+        app.game_screen.handle_square_click(instance.r, instance.c)
+
+    def update_board(self, board, selected, legal_targets, last_move):
+        # Сброс цветов
+        for (r, c), btn in self.squares.items():
+            btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
+            btn.text = ""
+            
+        # Отображение фигур (используем буквы для совместимости со шрифтами)
+        piece_map = {'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙', 'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'}
+        for r in range(8):
+            for c in range(8):
+                p = board[r][c]
+                if p != '.':
+                    self.squares[(r,c)].text = piece_map.get(p, p)
+                    self.squares[(r,c)].color = (0,0,0,1) if p.isupper() else (1,1,1,1)
+
+        # Подсветка последнего хода
+        if last_move:
+            for rr, cc in (last_move[0:2], last_move[2:4]):
+                self.squares[(rr,cc)].background_color = (0.8, 0.8, 0.4, 1)
+                
+        # Подсветка выбранной фигуры
+        if selected:
+            self.squares[selected].background_color = (0.96, 0.84, 0.43, 1)
+            
+        # Подсветка возможных ходов
+        for m in legal_targets:
+            tr, tc = m[2], m[3]
+            if board[tr][tc] != '.' or m[5]=='ep':
+                self.squares[(tr,tc)].background_color = (0.8, 0.3, 0.3, 0.8)
+            else:
+                self.squares[(tr,tc)].background_color = (0.6, 0.8, 0.6, 0.8)
+
+class MainMenuScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20))
+        title = Label(text="Шахматы", font_size=dp(40), bold=True, size_hint_y=0.4)
+        layout.add_widget(title)
+        
+        btn_2p = Button(text="2 Игрока", font_size=dp(20), size_hint_y=0.15)
+        btn_2p.bind(on_release=lambda x: self.start_game('2p'))
+        layout.add_widget(btn_2p)
+        
+        btn_bot = Button(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.15)
+        btn_bot.bind(on_release=lambda x: setattr(self.manager, 'current', 'bot_menu'))
+        layout.add_widget(btn_bot)
+        
+        self.add_widget(layout)
+
+    def start_game(self, mode):
+        app = App.get_running_app()
+        app.game_mode = mode
+        app.game_screen.new_game()
+        self.manager.current = 'game'
+
+class BotMenuScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20))
+        layout.add_widget(Label(text="Сложность", font_size=dp(30), size_hint_y=0.3))
+        
+        for diff, text in [(1, "Легкий"), (2, "Средний"), (3, "Сложный")]:
+            btn = Button(text=text, font_size=dp(20), size_hint_y=0.15)
+            btn.bind(on_release=lambda x, d=diff: self.start_bot(d))
+            layout.add_widget(btn)
+            
+        btn_back = Button(text="Назад", font_size=dp(20), size_hint_y=0.15, background_color=(0.5, 0.2, 0.2, 1))
+        btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main_menu'))
+        layout.add_widget(btn_back)
+        self.add_widget(layout)
+
+    def start_bot(self, diff):
+        app = App.get_running_app()
+        app.game_mode = 'bot'
+        app.bot_diff = diff
+        app.game_screen.new_game()
+        self.manager.current = 'game'
+
+class GameScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.state = start_state()
+        self.history = []
+        self.selected = None
+        self.legal_targets = []
+        self.last_move = None
+        self.bot_thinking = False
+        
+        layout = BoxLayout(orientation='vertical')
+        
+        # Верхняя панель
+        top_bar = BoxLayout(size_hint_y=0.1, spacing=dp(5), padding=dp(5))
+        btn_menu = Button(text="Меню", size_hint_x=0.3)
+        btn_menu.bind(on_release=self.go_to_menu)
+        top_bar.add_widget(btn_menu)
+        
+        self.status_label = Label(text="Ход белых", size_hint_x=0.4)
+        top_bar.add_widget(self.status_label)
+        
+        btn_undo = Button(text="Отмена", size_hint_x=0.3)
+        btn_undo.bind(on_release=self.undo_move)
+        top_bar.add_widget(btn_undo)
+        layout.add_widget(top_bar)
+        
+        # Доска
+        self.board_ui = ChessBoard()
+        layout.add_widget(self.board_ui)
+        self.add_widget(layout)
+        
+        Clock.schedule_interval(self.check_status, 0.5)
+
+    def new_game(self):
+        self.state = start_state()
+        self.history = []
+        self.selected = None
+        self.legal_targets = []
+        self.last_move = None
+        self.bot_thinking = False
+        self.update_ui()
+
+    def update_ui(self):
+        self.board_ui.update_board(self.state['board'], self.selected, self.legal_targets, self.last_move)
+        self.status_label.text = self.get_status_text()
+
+    def get_status_text(self):
+        if self.bot_thinking: return "Бот думает..."
+        st = game_status(self.state)
+        if st == 'checkmate': return "МАТ! Игра окончена."
+        if st == 'stalemate': return "Ничья (пат)."
+        if st == 'draw50': return "Ничья (50 ходов)."
+        return "Ход белых" if self.state['turn'] == 'w' else "Ход чёрных"
+
+    def check_status(self, dt):
+        self.update_ui()
+
+    def go_to_menu(self, instance):
+        App.get_running_app().bot_gen += 1
+        self.bot_thinking = False
+        self.manager.current = 'main_menu'
+
+    def undo_move(self, instance):
+        if App.get_running_app().game_mode == 'online': return
+        if self.history:
+            self.state, self.last_move = self.history.pop()
+            if App.get_running_app().game_mode == 'bot' and self.state['turn'] == 'b' and self.history:
+                self.state, self.last_move = self.history.pop()
+        self.selected = None
+        self.legal_targets = []
+        self.update_ui()
+
+    def handle_square_click(self, r, c):
+        if game_status(self.state) is not None: return
+        if App.get_running_app().game_mode == 'bot' and (self.bot_thinking or self.state['turn'] == 'b'): return
+
+        if self.selected:
+            for m in self.legal_targets:
+                if (m[2], m[3]) == (r, c):
+                    if m[4]: # Превращение пешки
+                        self.show_promotion(m)
+                        return
+                    self.make_move(m)
+                    return
+                    
+        p = self.state['board'][r][c]
+        turn = self.state['turn']
+        if p != '.' and ((turn=='w' and p.isupper()) or (turn=='b' and p.islower())):
+            self.selected = (r, c)
+            self.legal_targets = [m for m in legal_moves(self.state) if (m[0],m[1]) == (r, c)]
+        else:
+            self.selected = None
+            self.legal_targets = []
+        self.update_ui()
+
+    def show_promotion(self, m):
+        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+        content.add_widget(Label(text="Выберите фигуру:"))
+        btn_layout = BoxLayout(spacing=dp(10))
+        for pr in ['Q', 'R', 'B', 'N']:
+            btn = Button(text=pr, font_size=dp(30))
+            btn.bind(on_release=lambda x, p=pr: self.finish_promotion(m, p))
+            btn_layout.add_widget(btn)
+        content.add_widget(btn_layout)
+        self.popup = Popup(title="Превращение", content=content, size_hint=(0.8, 0.4))
+        self.popup.open()
+
+    def finish_promotion(self, m, pr):
+        self.popup.dismiss()
+        new_m = (m[0], m[1], m[2], m[3], pr, m[5])
+        self.make_move(new_m)
+
+    def make_move(self, m):
+        self.history.append((copy_state(self.state), self.last_move))
+        self.state = apply_move(self.state, m)
+        self.last_move = m
+        self.selected = None
+        self.legal_targets = []
+        App.get_running_app().play_sound()
+        self.update_ui()
+        
+        if App.get_running_app().game_mode == 'bot' and game_status(self.state) is None and self.state['turn'] == 'b':
+            self.start_bot()
+
+    def start_bot(self):
+        self.bot_thinking = True
+        app = App.get_running_app()
+        app.bot_gen += 1
+        my_gen = app.bot_gen
+        s_copy = copy_state(self.state)
+        
+        def compute():
+            m = get_bot_move(s_copy, app.bot_diff)
+            Clock.schedule_once(lambda dt: self.apply_bot(m, my_gen))
+            
+        threading.Thread(target=compute, daemon=True).start()
+
+    def apply_bot(self, m, gen):
+        app = App.get_running_app()
+        if gen != app.bot_gen: return
+        self.bot_thinking = False
+        if m:
+            if m[4]: m = (m[0], m[1], m[2], m[3], 'Q', m[5])
+            self.history.append((copy_state(self.state), self.last_move))
+            self.state = apply_move(self.state, m)
+            self.last_move = m
+            app.play_sound()
+        self.update_ui()
+
+class ChessApp(App):
+    game_mode = '2p'
+    bot_diff = 1
+    bot_gen = 0
+    sound_move = None
+
+    def build(self):
+        # Инициализация звука (создаем файл beep.wav если его нет)
+        self.init_audio()
+        
+        sm = ScreenManager()
+        sm.add_widget(MainMenuScreen(name='main_menu'))
+        sm.add_widget(BotMenuScreen(name='bot_menu'))
+        self.game_screen = GameScreen(name='game')
+        sm.add_widget(self.game_screen)
+        return sm
+
+    def init_audio(self):
+        # Генерируем простой звук хода
+        path = "beep.wav"
+        if not os.path.exists(path):
+            try:
+                sample_rate = 16000
+                n = int(sample_rate * 0.08)
+                buf = io.BytesIO()
+                with wave.open(buf, 'wb') as wf:
+                    wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(sample_rate)
+                    frames = bytearray(n * 2)
+                    for i in range(n):
+                        env = min(1.0, i / 200) * min(1.0, (n - i) / 200)
+                        v = int(32767 * 0.2 * env * math.sin(2 * math.pi * 400 * i / sample_rate))
+                        struct.pack_into('<h', frames, i * 2, v)
+                    wf.writeframes(bytes(frames))
+                with open(path, 'wb') as f:
+                    f.write(buf.getvalue())
+            except: pass
+        
+        if os.path.exists(path):
+            self.sound_move = SoundLoader.load(path)
+
+    def play_sound(self):
+        if self.sound_move:
+            self.sound_move.play()
+
+if __name__ == '__main__':
+    ChessApp().run()
