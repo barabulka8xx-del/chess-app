@@ -7,7 +7,6 @@ import io
 import wave
 import struct
 import math
-import time
 
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
@@ -18,7 +17,6 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
-from kivy.properties import ListProperty, StringProperty, BooleanProperty
 from kivy.metrics import dp
 
 # ================== ЛОГИКА ШАХМАТ ==================
@@ -192,6 +190,7 @@ def apply_move(s, m):
     piece = b[fr][fc]
     color = 'w' if piece.isupper() else 'b'
     captured = b[tr][tc]
+    
     if piece=='K': ns['castle_wk']=ns['castle_wq']=False
     if piece=='k': ns['castle_bk']=ns['castle_bq']=False
     if piece=='R':
@@ -206,20 +205,25 @@ def apply_move(s, m):
     if captured=='r':
         if (tr,tc)==(0,0): ns['castle_bq']=False
         if (tr,tc)==(0,7): ns['castle_bk']=False
+        
     ns['ep'] = None
     if piece.upper()=='P' and abs(tr-fr)==2:
         ns['ep'] = ((fr+tr)//2, fc)
+        
     if sp=='ep':
         if color=='w': b[tr+1][tc] = '.'
         else: b[tr-1][tc] = '.'
+        
     b[tr][tc] = promo if promo else piece
     b[fr][fc] = '.'
+    
     if sp=='O-O':
         if color=='w': b[7][5]=b[7][7]; b[7][7]='.'
         else: b[0][5]=b[0][7]; b[0][7]='.'
     elif sp=='O-O-O':
         if color=='w': b[7][3]=b[7][0]; b[7][0]='.'
         else: b[0][3]=b[0][0]; b[0][0]='.'
+        
     ns['turn'] = 'b' if color=='w' else 'w'
     pawn_or_cap = (piece.upper()=='P') or (captured != '.')
     ns['halfmove'] = 0 if pawn_or_cap else s['halfmove']+1
@@ -229,11 +233,10 @@ def legal_moves(s):
     turn = s['turn']
     return [m for m in gen_pseudo(s) if not in_check(apply_move(s, m), turn)]
 
-def game_status(s, hist=None):
+def game_status(s):
     if not legal_moves(s):
         return 'checkmate' if in_check(s, s['turn']) else 'stalemate'
     if s['halfmove'] >= 100: return 'draw50'
-    # Для простоты убрал проверку материала и троекратного повторения
     return None
 
 # ================== БОТ (МИНИМАКС) ==================
@@ -313,12 +316,10 @@ class ChessBoard(GridLayout):
         app.game_screen.handle_square_click(instance.r, instance.c)
 
     def update_board(self, board, selected, legal_targets, last_move):
-        # Сброс цветов
         for (r, c), btn in self.squares.items():
             btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
             btn.text = ""
             
-        # Отображение фигур (используем буквы для совместимости со шрифтами)
         piece_map = {'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙', 'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'}
         for r in range(8):
             for c in range(8):
@@ -327,16 +328,13 @@ class ChessBoard(GridLayout):
                     self.squares[(r,c)].text = piece_map.get(p, p)
                     self.squares[(r,c)].color = (0,0,0,1) if p.isupper() else (1,1,1,1)
 
-        # Подсветка последнего хода
         if last_move:
             for rr, cc in (last_move[0:2], last_move[2:4]):
                 self.squares[(rr,cc)].background_color = (0.8, 0.8, 0.4, 1)
                 
-        # Подсветка выбранной фигуры
         if selected:
             self.squares[selected].background_color = (0.96, 0.84, 0.43, 1)
             
-        # Подсветка возможных ходов
         for m in legal_targets:
             tr, tc = m[2], m[3]
             if board[tr][tc] != '.' or m[5]=='ep':
@@ -402,7 +400,6 @@ class GameScreen(Screen):
         
         layout = BoxLayout(orientation='vertical')
         
-        # Верхняя панель
         top_bar = BoxLayout(size_hint_y=0.1, spacing=dp(5), padding=dp(5))
         btn_menu = Button(text="Меню", size_hint_x=0.3)
         btn_menu.bind(on_release=self.go_to_menu)
@@ -416,7 +413,6 @@ class GameScreen(Screen):
         top_bar.add_widget(btn_undo)
         layout.add_widget(top_bar)
         
-        # Доска
         self.board_ui = ChessBoard()
         layout.add_widget(self.board_ui)
         self.add_widget(layout)
@@ -453,7 +449,6 @@ class GameScreen(Screen):
         self.manager.current = 'main_menu'
 
     def undo_move(self, instance):
-        if App.get_running_app().game_mode == 'online': return
         if self.history:
             self.state, self.last_move = self.history.pop()
             if App.get_running_app().game_mode == 'bot' and self.state['turn'] == 'b' and self.history:
@@ -469,7 +464,7 @@ class GameScreen(Screen):
         if self.selected:
             for m in self.legal_targets:
                 if (m[2], m[3]) == (r, c):
-                    if m[4]: # Превращение пешки
+                    if m[4]:
                         self.show_promotion(m)
                         return
                     self.make_move(m)
@@ -546,7 +541,6 @@ class ChessApp(App):
     sound_move = None
 
     def build(self):
-        # Инициализация звука (создаем файл beep.wav если его нет)
         self.init_audio()
         
         sm = ScreenManager()
@@ -557,7 +551,6 @@ class ChessApp(App):
         return sm
 
     def init_audio(self):
-        # Генерируем простой звук хода
         path = "beep.wav"
         if not os.path.exists(path):
             try:
