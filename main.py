@@ -596,6 +596,7 @@ class ChessApp(App):
     bot_diff = 1
     bot_gen = 0
     sound_move = None
+    bg_music = None
 
     def build(self):
         self.init_audio()
@@ -608,6 +609,7 @@ class ChessApp(App):
         return sm
 
     def init_audio(self):
+        # Звук хода
         path = "beep.wav"
         if not os.path.exists(path):
             try:
@@ -628,6 +630,13 @@ class ChessApp(App):
         
         if os.path.exists(path):
             self.sound_move = SoundLoader.load(path)
+
+        # Фоновая музыка (если файл загружен в проект)
+        self.bg_music = SoundLoader.load('music.ogg')
+        if self.bg_music:
+            self.bg_music.loop = True
+            self.bg_music.volume = 0.3 # Делаем музыку на фоне тише
+            self.bg_music.play()
 
     def play_sound(self):
         if self.sound_move:
