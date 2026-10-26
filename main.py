@@ -20,7 +20,7 @@ from kivy.core.audio import SoundLoader
 from kivy.metrics import dp
 from kivy.core.text import LabelBase
 
-# РЕГИСТРАЦИЯ ШРИФТА (чтобы были фигуры, а не квадратики)
+# РЕГИСТРАЦИЯ ШРИФТА
 LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 # ================== ЛОГИКА ШАХМАТ ==================
@@ -295,7 +295,7 @@ class SquareButton(Button):
         self.r = r
         self.c = c
         self.font_size = dp(32)
-        self.font_name = 'ChessFont'  # ПРИМЕНЯЕМ ШРИФТ
+        self.font_name = 'ChessFont'
         self.background_normal = ''
         self.background_color = (1, 1, 1, 1)
 
@@ -325,13 +325,21 @@ class ChessBoard(GridLayout):
             btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
             btn.text = ""
             
-        piece_map = {'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙', 'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'}
+        # ИСПОЛЬЗУЕМ ТОЛЬКО ЗАЛИТЫЕ ФИГУРЫ
+        piece_map = {
+            'K':'♚','Q':'♛','R':'♜','B':'♝','N':'♞','P':'♟', 
+            'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
+        }
+        
         for r in range(8):
             for c in range(8):
                 p = board[r][c]
                 if p != '.':
                     self.squares[(r,c)].text = piece_map.get(p, p)
-                    self.squares[(r,c)].color = (0,0,0,1) if p.isupper() else (1,1,1,1)
+                    if p.isupper():
+                        self.squares[(r,c)].color = (1, 1, 1, 1) # Белые
+                    else:
+                        self.squares[(r,c)].color = (0, 0, 0, 1) # Черные
 
         if last_move:
             for rr, cc in (last_move[0:2], last_move[2:4]):
@@ -418,7 +426,13 @@ class GameScreen(Screen):
         top_bar.add_widget(btn_undo)
         layout.add_widget(top_bar)
         
-        self.board_ui = ChessBoard()
+        # --- УМЕНЬШАЕМ ДОСКУ И ЦЕНТРИРУЕМ ---
+        # size_hint=(0.95, None) - 95% ширины экрана, высота подстраивается под ширину
+        # pos_hint={'center_x': 0.5, 'center_y': 0.5} - центрируем
+        self.board_ui = ChessBoard(size_hint=(0.95, None), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        self.board_ui.bind(width=lambda instance, value: setattr(instance, 'height', value))
+        # ------------------------------------
+        
         layout.add_widget(self.board_ui)
         self.add_widget(layout)
         
