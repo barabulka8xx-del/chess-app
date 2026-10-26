@@ -18,6 +18,10 @@ from kivy.uix.popup import Popup
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.metrics import dp
+from kivy.core.text import LabelBase
+
+# РЕГИСТРАЦИЯ ШРИФТА (чтобы были фигуры, а не квадратики)
+LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 # ================== ЛОГИКА ШАХМАТ ==================
 KNIGHT_OFF = [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]
@@ -291,6 +295,7 @@ class SquareButton(Button):
         self.r = r
         self.c = c
         self.font_size = dp(32)
+        self.font_name = 'ChessFont'  # ПРИМЕНЯЕМ ШРИФТ
         self.background_normal = ''
         self.background_color = (1, 1, 1, 1)
 
