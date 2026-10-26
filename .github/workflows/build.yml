@@ -28,6 +28,11 @@ jobs:
         pip install --upgrade pip
         pip install buildozer "cython==0.29.33"
 
+    # АВТОМАТИЧЕСКОЕ СКАЧИВАНИЕ ШРИФТА НА СЕРВЕРЕ
+    - name: Download Font (Auto)
+      run: |
+        curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
+
     - name: Clear Buildozer cache
       run: |
         rm -rf ~/.buildozer
