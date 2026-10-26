@@ -341,7 +341,6 @@ class ChessBoard(GridLayout):
                     btn = self.squares[(r,c)]
                     btn.text = piece_map.get(p, p)
                     btn.color = (1, 1, 1, 1) if p.isupper() else (0, 0, 0, 1)
-                    # Плавное появление фигуры (Fade-in)
                     btn.opacity = 0
                     Animation(opacity=1, duration=0.2).start(btn)
 
@@ -364,7 +363,6 @@ class MainMenuScreen(Screen):
         super().__init__(**kwargs)
         layout = FloatLayout()
         
-        # ФОТО В МЕНЮ (убедись, что файл называется menu_bg.png)
         bg_image = Image(
             source='menu_bg.png', 
             allow_stretch=True, 
@@ -447,7 +445,6 @@ class GameScreen(Screen):
         
         main_layout = FloatLayout()
         
-        # Кнопки строго наверху на всю ширину
         top_bar = BoxLayout(
             size_hint=(1, None), 
             height=dp(50), 
@@ -468,7 +465,6 @@ class GameScreen(Screen):
         
         main_layout.add_widget(top_bar)
         
-        # Доска по центру
         self.board_ui = ChessBoard(
             size_hint=(0.95, None), 
             pos_hint={'center_x': 0.5, 'center_y': 0.5}
