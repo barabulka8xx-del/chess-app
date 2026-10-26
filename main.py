@@ -324,9 +324,9 @@ class ChessBoard(GridLayout):
         app.game_screen.handle_square_click(instance.r, instance.c)
 
     def update_board(self, board, selected, legal_targets, last_move):
+        # Сброс цветов
         for (r, c), btn in self.squares.items():
-            base_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
-            Animation(background_color=base_color, duration=0.15).start(btn)
+            btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
             btn.text = ""
             
         piece_map = {
@@ -341,22 +341,21 @@ class ChessBoard(GridLayout):
                     btn = self.squares[(r,c)]
                     btn.text = piece_map.get(p, p)
                     btn.color = (1, 1, 1, 1) if p.isupper() else (0, 0, 0, 1)
-                    btn.opacity = 0
-                    Animation(opacity=1, duration=0.2).start(btn)
+                    btn.opacity = 1 # Фиксируем непрозрачность (исправление бага)
 
         if last_move:
             for rr, cc in (last_move[0:2], last_move[2:4]):
-                Animation(background_color=(0.8, 0.8, 0.4, 1), duration=0.2).start(self.squares[(rr,cc)])
+                self.squares[(rr,cc)].background_color = (0.8, 0.8, 0.4, 1)
                 
         if selected:
-            Animation(background_color=(0.96, 0.84, 0.43, 1), duration=0.1).start(self.squares[selected])
+            self.squares[selected].background_color = (0.96, 0.84, 0.43, 1)
             
         for m in legal_targets:
             tr, tc = m[2], m[3]
             if board[tr][tc] != '.' or m[5]=='ep':
-                Animation(background_color=(0.8, 0.3, 0.3, 0.8), duration=0.15).start(self.squares[(tr,tc)])
+                self.squares[(tr,tc)].background_color = (0.8, 0.3, 0.3, 0.8)
             else:
-                Animation(background_color=(0.6, 0.8, 0.6, 0.8), duration=0.15).start(self.squares[(tr,tc)])
+                self.squares[(tr,tc)].background_color = (0.6, 0.8, 0.6, 0.8)
 
 class MainMenuScreen(Screen):
     def __init__(self, **kwargs):
@@ -445,13 +444,16 @@ class GameScreen(Screen):
         
         main_layout = FloatLayout()
         
-        top_bar = BoxLayout(
-            size_hint=(1, None), 
-            height=dp(50), 
-            pos_hint={'top': 1}, 
-            spacing=dp(5), 
-            padding=dp(5)
+        # Контейнер, который держит кнопки и доску вместе (без черной дыры)
+        game_container = BoxLayout(
+            orientation='vertical', 
+            size_hint=(0.95, None), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
         )
+        game_container.bind(width=lambda instance, value: setattr(instance, 'height', value + dp(50)))
+
+        # Кнопки прямо над доской
+        top_bar = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(5))
         btn_menu = Button(text="Меню", font_size=dp(16))
         btn_menu.bind(on_release=self.go_to_menu)
         top_bar.add_widget(btn_menu)
@@ -463,18 +465,15 @@ class GameScreen(Screen):
         btn_undo.bind(on_release=self.undo_move)
         top_bar.add_widget(btn_undo)
         
-        main_layout.add_widget(top_bar)
+        game_container.add_widget(top_bar)
         
-        self.board_ui = ChessBoard(
-            size_hint=(0.95, None), 
-            pos_hint={'center_x': 0.5, 'center_y': 0.5}
-        )
+        # Доска
+        self.board_ui = ChessBoard(size_hint_y=None)
         self.board_ui.bind(width=lambda instance, value: setattr(instance, 'height', value))
+        game_container.add_widget(self.board_ui)
         
-        main_layout.add_widget(self.board_ui)
+        main_layout.add_widget(game_container)
         self.add_widget(main_layout)
-        
-        Clock.schedule_interval(self.check_status, 0.5)
 
     def new_game(self):
         self.state = start_state()
@@ -496,9 +495,6 @@ class GameScreen(Screen):
         if st == 'stalemate': return "Ничья (пат)."
         if st == 'draw50': return "Ничья (50 ходов)."
         return "Ход белых" if self.state['turn'] == 'w' else "Ход чёрных"
-
-    def check_status(self, dt):
-        self.update_ui()
 
     def go_to_menu(self, instance):
         App.get_running_app().bot_gen += 1
@@ -609,7 +605,6 @@ class ChessApp(App):
         return sm
 
     def init_audio(self):
-        # Звук хода
         path = "beep.wav"
         if not os.path.exists(path):
             try:
@@ -631,8 +626,8 @@ class ChessApp(App):
         if os.path.exists(path):
             self.sound_move = SoundLoader.load(path)
 
-        # Фоновая музыка (если файл загружен в проект)
-        self.bg_music = SoundLoader.load('music.ogg')
+        # ИСПРАВЛЕНО: Теперь ищем твой файл menu_music.mp3
+        self.bg_music = SoundLoader.load('menu_music.mp3')
         if self.bg_music:
             self.bg_music.loop = True
             self.bg_music.volume = 0.3 # Делаем музыку на фоне тише
@@ -643,4 +638,5 @@ class ChessApp(App):
             self.sound_move.play()
 
 if __name__ == '__main__':
+    ChessApp().run()
     ChessApp().run()
