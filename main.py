@@ -12,6 +12,7 @@ from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
@@ -325,7 +326,7 @@ class ChessBoard(GridLayout):
             btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
             btn.text = ""
             
-        # ИСПОЛЬЗУЕМ ТОЛЬКО ЗАЛИТЫЕ ФИГУРЫ
+        # ЗАЛИТЫЕ ФИГУРЫ ДЛЯ ВСЕХ
         piece_map = {
             'K':'♚','Q':'♛','R':'♜','B':'♝','N':'♞','P':'♟', 
             'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
@@ -358,8 +359,11 @@ class ChessBoard(GridLayout):
 class MainMenuScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20))
-        title = Label(text="Шахматы", font_size=dp(40), bold=True, size_hint_y=0.4)
+        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
+        
+        layout.add_widget(Label(size_hint_y=0.1))
+        
+        title = Label(text="Шахматы", font_size=dp(40), bold=True, size_hint_y=0.2)
         layout.add_widget(title)
         
         btn_2p = Button(text="2 Игрока", font_size=dp(20), size_hint_y=0.15)
@@ -369,6 +373,16 @@ class MainMenuScreen(Screen):
         btn_bot = Button(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.15)
         btn_bot.bind(on_release=lambda x: setattr(self.manager, 'current', 'bot_menu'))
         layout.add_widget(btn_bot)
+        
+        layout.add_widget(Label(size_hint_y=0.3))
+        
+        signature = Label(
+            text="Сделано Kirillom Der**", 
+            font_size=dp(12), 
+            color=(0.7, 0.7, 0.7, 1),
+            size_hint_y=0.1
+        )
+        layout.add_widget(signature)
         
         self.add_widget(layout)
 
@@ -411,30 +425,35 @@ class GameScreen(Screen):
         self.last_move = None
         self.bot_thinking = False
         
-        layout = BoxLayout(orientation='vertical')
+        main_layout = FloatLayout()
         
-        top_bar = BoxLayout(size_hint_y=0.1, spacing=dp(5), padding=dp(5))
-        btn_menu = Button(text="Меню", size_hint_x=0.3)
+        game_container = BoxLayout(
+            orientation='vertical', 
+            size_hint=(0.95, None), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        game_container.bind(width=lambda instance, value: setattr(instance, 'height', value + dp(50)))
+
+        top_bar = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(5))
+        btn_menu = Button(text="Меню", font_size=dp(16))
         btn_menu.bind(on_release=self.go_to_menu)
         top_bar.add_widget(btn_menu)
         
-        self.status_label = Label(text="Ход белых", size_hint_x=0.4)
+        self.status_label = Label(text="Ход белых", font_size=dp(18))
         top_bar.add_widget(self.status_label)
         
-        btn_undo = Button(text="Отмена", size_hint_x=0.3)
+        btn_undo = Button(text="Отмена", font_size=dp(16))
         btn_undo.bind(on_release=self.undo_move)
         top_bar.add_widget(btn_undo)
-        layout.add_widget(top_bar)
         
-        # --- УМЕНЬШАЕМ ДОСКУ И ЦЕНТРИРУЕМ ---
-        # size_hint=(0.95, None) - 95% ширины экрана, высота подстраивается под ширину
-        # pos_hint={'center_x': 0.5, 'center_y': 0.5} - центрируем
-        self.board_ui = ChessBoard(size_hint=(0.95, None), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        game_container.add_widget(top_bar)
+        
+        self.board_ui = ChessBoard(size_hint_y=None)
         self.board_ui.bind(width=lambda instance, value: setattr(instance, 'height', value))
-        # ------------------------------------
+        game_container.add_widget(self.board_ui)
         
-        layout.add_widget(self.board_ui)
-        self.add_widget(layout)
+        main_layout.add_widget(game_container)
+        self.add_widget(main_layout)
         
         Clock.schedule_interval(self.check_status, 0.5)
 
@@ -504,7 +523,7 @@ class GameScreen(Screen):
         content.add_widget(Label(text="Выберите фигуру:"))
         btn_layout = BoxLayout(spacing=dp(10))
         for pr in ['Q', 'R', 'B', 'N']:
-            btn = Button(text=pr, font_size=dp(30))
+            btn = Button(text=pr, font_size=dp(30), font_name='ChessFont')
             btn.bind(on_release=lambda x, p=pr: self.finish_promotion(m, p))
             btn_layout.add_widget(btn)
         content.add_widget(btn_layout)
