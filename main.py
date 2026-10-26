@@ -15,11 +15,13 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.image import Image
 from kivy.uix.popup import Popup
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.metrics import dp
 from kivy.core.text import LabelBase
+from kivy.animation import Animation
 
 # РЕГИСТРАЦИЯ ШРИФТА
 LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
@@ -323,10 +325,10 @@ class ChessBoard(GridLayout):
 
     def update_board(self, board, selected, legal_targets, last_move):
         for (r, c), btn in self.squares.items():
-            btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
+            base_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
+            Animation(background_color=base_color, duration=0.15).start(btn)
             btn.text = ""
             
-        # ЗАЛИТЫЕ ФИГУРЫ ДЛЯ ВСЕХ
         piece_map = {
             'K':'♚','Q':'♛','R':'♜','B':'♝','N':'♞','P':'♟', 
             'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
@@ -336,45 +338,62 @@ class ChessBoard(GridLayout):
             for c in range(8):
                 p = board[r][c]
                 if p != '.':
-                    self.squares[(r,c)].text = piece_map.get(p, p)
-                    if p.isupper():
-                        self.squares[(r,c)].color = (1, 1, 1, 1) # Белые
-                    else:
-                        self.squares[(r,c)].color = (0, 0, 0, 1) # Черные
+                    btn = self.squares[(r,c)]
+                    btn.text = piece_map.get(p, p)
+                    btn.color = (1, 1, 1, 1) if p.isupper() else (0, 0, 0, 1)
+                    # Плавное появление фигуры (Fade-in)
+                    btn.opacity = 0
+                    Animation(opacity=1, duration=0.2).start(btn)
 
         if last_move:
             for rr, cc in (last_move[0:2], last_move[2:4]):
-                self.squares[(rr,cc)].background_color = (0.8, 0.8, 0.4, 1)
+                Animation(background_color=(0.8, 0.8, 0.4, 1), duration=0.2).start(self.squares[(rr,cc)])
                 
         if selected:
-            self.squares[selected].background_color = (0.96, 0.84, 0.43, 1)
+            Animation(background_color=(0.96, 0.84, 0.43, 1), duration=0.1).start(self.squares[selected])
             
         for m in legal_targets:
             tr, tc = m[2], m[3]
             if board[tr][tc] != '.' or m[5]=='ep':
-                self.squares[(tr,tc)].background_color = (0.8, 0.3, 0.3, 0.8)
+                Animation(background_color=(0.8, 0.3, 0.3, 0.8), duration=0.15).start(self.squares[(tr,tc)])
             else:
-                self.squares[(tr,tc)].background_color = (0.6, 0.8, 0.6, 0.8)
+                Animation(background_color=(0.6, 0.8, 0.6, 0.8), duration=0.15).start(self.squares[(tr,tc)])
 
 class MainMenuScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
+        layout = FloatLayout()
         
-        layout.add_widget(Label(size_hint_y=0.1))
+        # ФОТО В МЕНЮ (убедись, что файл называется menu_bg.png)
+        bg_image = Image(
+            source='menu_bg.png', 
+            allow_stretch=True, 
+            keep_ratio=False,
+            size_hint=(1, 1), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        layout.add_widget(bg_image)
+        
+        ui_layout = BoxLayout(
+            orientation='vertical', 
+            padding=dp(20), 
+            spacing=dp(20),
+            size_hint=(0.8, 0.8),
+            pos_hint={'center_x': 0.5, 'center_y': 0.4}
+        )
         
         title = Label(text="Шахматы", font_size=dp(40), bold=True, size_hint_y=0.2)
-        layout.add_widget(title)
+        ui_layout.add_widget(title)
         
         btn_2p = Button(text="2 Игрока", font_size=dp(20), size_hint_y=0.15)
         btn_2p.bind(on_release=lambda x: self.start_game('2p'))
-        layout.add_widget(btn_2p)
+        ui_layout.add_widget(btn_2p)
         
         btn_bot = Button(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.15)
         btn_bot.bind(on_release=lambda x: setattr(self.manager, 'current', 'bot_menu'))
-        layout.add_widget(btn_bot)
+        ui_layout.add_widget(btn_bot)
         
-        layout.add_widget(Label(size_hint_y=0.3))
+        ui_layout.add_widget(Label(size_hint_y=0.3))
         
         signature = Label(
             text="Сделано Kirillom Der**", 
@@ -382,8 +401,9 @@ class MainMenuScreen(Screen):
             color=(0.7, 0.7, 0.7, 1),
             size_hint_y=0.1
         )
-        layout.add_widget(signature)
+        ui_layout.add_widget(signature)
         
+        layout.add_widget(ui_layout)
         self.add_widget(layout)
 
     def start_game(self, mode):
@@ -427,14 +447,14 @@ class GameScreen(Screen):
         
         main_layout = FloatLayout()
         
-        game_container = BoxLayout(
-            orientation='vertical', 
-            size_hint=(0.95, None), 
-            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        # Кнопки строго наверху на всю ширину
+        top_bar = BoxLayout(
+            size_hint=(1, None), 
+            height=dp(50), 
+            pos_hint={'top': 1}, 
+            spacing=dp(5), 
+            padding=dp(5)
         )
-        game_container.bind(width=lambda instance, value: setattr(instance, 'height', value + dp(50)))
-
-        top_bar = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(5))
         btn_menu = Button(text="Меню", font_size=dp(16))
         btn_menu.bind(on_release=self.go_to_menu)
         top_bar.add_widget(btn_menu)
@@ -446,13 +466,16 @@ class GameScreen(Screen):
         btn_undo.bind(on_release=self.undo_move)
         top_bar.add_widget(btn_undo)
         
-        game_container.add_widget(top_bar)
+        main_layout.add_widget(top_bar)
         
-        self.board_ui = ChessBoard(size_hint_y=None)
+        # Доска по центру
+        self.board_ui = ChessBoard(
+            size_hint=(0.95, None), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
         self.board_ui.bind(width=lambda instance, value: setattr(instance, 'height', value))
-        game_container.add_widget(self.board_ui)
         
-        main_layout.add_widget(game_container)
+        main_layout.add_widget(self.board_ui)
         self.add_widget(main_layout)
         
         Clock.schedule_interval(self.check_status, 0.5)
