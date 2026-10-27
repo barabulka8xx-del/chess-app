@@ -8,6 +8,8 @@ version = 1.0
 
 icon.filename = icon.png
 
+presplash.filename = splash.png
+
 requirements = python3==3.10.13, hostpython3==3.10.13, kivy==2.3.0, cython==0.29.33
 
 orientation = portrait
@@ -19,5 +21,5 @@ android.minapi = 24
 android.ndk = 25b
 android.python_version = 3.10
 
-# ВАЖНО: Разрешение на выход в интернет для онлайна
+# ВАЖНО: Разрешение на выход в интернет для онлайна gazan67
 android.permissions = INTERNET
