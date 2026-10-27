@@ -21,6 +21,7 @@ from kivy.uix.label import Label
 from kivy.uix.image import Image
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.metrics import dp
@@ -312,10 +313,8 @@ def legal_moves(s):
     return [m for m in gen_pseudo(s) if not in_check(apply_move(s, m), turn)]
 
 def insufficient_material(b):
-    """Проверяет, достаточно ли фигур на доске для мата."""
     pieces = []
     bishop_colors = []
-    
     for r in range(8):
         for c in range(8):
             p = b[r][c]
@@ -323,17 +322,13 @@ def insufficient_material(b):
                 pieces.append(p.lower())
                 if p.lower() == 'b': 
                     bishop_colors.append((r + c) % 2)
-                    
     if len(pieces) == 0:
         return True
-        
     if len(pieces) == 1 and pieces[0] in ['b', 'n']:
         return True
-        
     if len(pieces) > 1 and all(p == 'b' for p in pieces):
         if len(set(bishop_colors)) == 1:
             return True
-            
     return False
 
 def game_status(s):
@@ -366,7 +361,6 @@ def minimax(s, depth, alpha, beta, maximizing):
         if in_check(s, s['turn']): return -99999 if maximizing else 99999
         return 0
     if depth == 0: return evaluate_board(s)
-    
     if maximizing:
         v = -float('inf')
         for m in moves:
@@ -386,7 +380,6 @@ def get_bot_move(s, difficulty):
     moves = legal_moves(s)
     if not moves: return None
     if difficulty == 1: return random.choice(moves)
-    
     best_move = moves[0]; best_val = float('inf')
     for m in moves:
         val = minimax(apply_move(s, m), 2, -float('inf'), float('inf'), True)
@@ -395,10 +388,7 @@ def get_bot_move(s, difficulty):
             best_val = val
             best_move = m
     return best_move
-
-# --- НИЖЕ ВСТАВЬ ЧАСТЬ 2 ---
-
-# ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
+    # ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
@@ -609,7 +599,59 @@ class MainMenuScreen(BackgroundScreen):
         ui_layout.add_widget(Label(size_hint_y=0.05))
         ui_layout.add_widget(Label(text=f"v{GAME_VERSION}", font_size=dp(10), color=(0.5, 0.5, 0.5, 1), size_hint_y=0.05))
         ui_layout.add_widget(Label(text="Сделано Kirillom Der**", font_size=dp(12), color=(0.7, 0.7, 0.7, 1), size_hint_y=0.05))
+        
         self.main_layout.add_widget(ui_layout)
+
+        # КРУГЛАЯ КНОПКА (i) В ПРАВОМ НИЖНЕМ УГЛУ
+        self.info_btn = RoundedButton(
+            text="(i)", font_size=dp(20), bold=True,
+            size_hint=(None, None), size=(dp(50), dp(50)),
+            pos_hint={'right': 0.95, 'y': 0.05},
+            background_color=(0.2, 0.5, 0.8, 1)
+        )
+        self.info_btn.rect.radius = [dp(25)] # Делаем её круглой
+        self.info_btn.bind(on_release=self.show_changelog)
+        self.main_layout.add_widget(self.info_btn)
+
+    def show_changelog(self, instance):
+        """Окно с историей обновлений."""
+        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+        
+        scroll = ScrollView()
+        layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(15))
+        layout.bind(minimum_height=layout.setter('height'))
+        
+        title = Label(text="[b][color=f1c40f]История обновлений[/color][/b]", markup=True, font_size=dp(22), size_hint_y=None, height=dp(50))
+        layout.add_widget(title)
+        
+        log_text = (
+            "[b]Обновление 1[/b]\n"
+            "• Самый первый релиз игры.\n"
+            "• Игра с ботом, онлайн по коду, ранговый матч.\n"
+            "• Система рейтинга ЭЛО.\n\n"
+            "[b]Обновление 2[/b]\n"
+            "• Исправлены вылеты при запуске (фикс шрифтов и звука).\n"
+            "• Исправлена проблема с пропаданием ЭЛО после игры с ботом.\n"
+            "• Добавлена проверка версии (блокировка старых APK в ранге).\n"
+            "• Добавлена ничья при нехватке фигур (Insufficient material).\n"
+            "• Исправлен выход текста за края экрана в окнах.\n"
+            "• Добавлена кнопка (i) с информацией.\n"
+        )
+        
+        lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
+        lbl.bind(width=lambda instance, value: setattr(instance, 'text_size', (value, None)))
+        lbl.bind(texture_size=lambda instance, value: setattr(instance, 'height', value[1]))
+        layout.add_widget(lbl)
+        
+        scroll.add_widget(layout)
+        content.add_widget(scroll)
+        
+        btn_close = RoundedButton(text="Закрыть", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
+        popup = Popup(title="О игре", content=content, size_hint=(0.9, 0.8))
+        btn_close.bind(on_release=popup.dismiss)
+        content.add_widget(btn_close)
+        
+        popup.open()
 
     def on_pre_enter(self, *args):
         app = App.get_running_app()
@@ -679,7 +721,12 @@ class MainMenuScreen(BackgroundScreen):
                 if msg and msg != app.last_seen_notification:
                     app.last_seen_notification = msg
                     content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-                    content.add_widget(Label(text=msg, halign="center", font_size=dp(18)))
+                    
+                    # ФИКС ПЕРЕНОСА ТЕКСТА
+                    notif_lbl = Label(text=msg, halign="center", font_size=dp(18))
+                    notif_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+                    content.add_widget(notif_lbl)
+                    
                     btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
                     btn_old = RoundedButton(text="Играть на старой", background_color=(0.3, 0.3, 0.3, 1))
                     btn_old.bind(on_release=lambda x: popup.dismiss())
@@ -854,7 +901,12 @@ class RankedMenuScreen(BackgroundScreen):
             
             def show_update_popup():
                 content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-                content.add_widget(Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16)))
+                
+                # ФИКС ПЕРЕНОСА ТЕКСТА
+                lbl = Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16))
+                lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+                content.add_widget(lbl)
+                
                 btn = RoundedButton(text="Скачать обновление", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
                 def open_site(instance):
                     self.update_popup.dismiss()
