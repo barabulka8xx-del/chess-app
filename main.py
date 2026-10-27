@@ -36,14 +36,13 @@ SERVER_URL = "http://node.waifly.com:27402"
 # ================== КАСТОМНЫЕ КНОПКИ ==================
 class RoundedButton(Button):
     def __init__(self, **kwargs):
-        # Вытаскиваем цвет фона, чтобы применить его к нашему закругленному прямоугольнику
         bg_col = kwargs.pop('background_color', (0.4, 0.4, 0.4, 1))
         
         super().__init__(**kwargs)
         self.background_normal = ''
         self.background_down = ''
         
-        # ГЛАВНЫЙ ФИКС: скрываем стандартный прямоугольный фон Kivy
+        # Прозрачный фон для проявления скруглений
         self.background_color = (0, 0, 0, 0)
         
         with self.canvas.before:
@@ -625,7 +624,6 @@ class MainMenuScreen(BackgroundScreen):
             self.elo_label.text = "ЭЛО: Недоступно (Офлайн)"
             self.elo_label.color = (0.5, 0.5, 0.5, 1)
         else:
-            # СИНХРОНИЗАЦИЯ ЭЛО С СЕРВЕРОМ
             def sync_success(req, result):
                 app.player_elo = result.get('elo', app.player_elo)
                 app.save_user_data()
@@ -694,36 +692,45 @@ class TwoPlayersMenuScreen(BackgroundScreen):
             Popup(title="Офлайн", content=Label(text="Онлайн по коду недоступен\nбез интернета."), size_hint=(0.8, 0.3)).open()
             return
 
-        content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-        btn_create = RoundedButton(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
-        btn_join = RoundedButton(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
-        code_input = TextInput(hint_text="Код комнаты", multiline=False, size_hint_y=None, height=dp(50))
-        
-        content.add_widget(btn_create)
-        content.add_widget(code_input)
-        content.add_widget(btn_join)
-        
-        self.room_popup = Popup(title="Онлайн по коду", content=content, size_hint=(0.8, 0.5))
-        
-        def create_req(req, result):
-            self.room_popup.dismiss()
-            Popup(title="Комната создана", content=Label(text=f"Код: {result['room_id']}\nЖдем соперника..."), size_hint=(0.8, 0.4)).open()
-            self.poll_join(result['room_id'])
+        # ПРОВЕРКА СЕРВЕРА ПЕРЕД СОЗДАНИЕМ КОМНАТЫ
+        def ping_success(req, result):
+            # Если сервер ответил, показываем меню комнат
+            content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+            btn_create = RoundedButton(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
+            btn_join = RoundedButton(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
+            code_input = TextInput(hint_text="Код комнаты", multiline=False, size_hint_y=None, height=dp(50))
+            
+            content.add_widget(btn_create)
+            content.add_widget(code_input)
+            content.add_widget(btn_join)
+            
+            self.room_popup = Popup(title="Онлайн по коду", content=content, size_hint=(0.8, 0.5))
+            
+            def create_req(req, result):
+                self.room_popup.dismiss()
+                Popup(title="Комната создана", content=Label(text=f"Код: {result['room_id']}\nЖдем соперника..."), size_hint=(0.8, 0.4)).open()
+                self.poll_join(result['room_id'])
 
-        def join_req(req, result):
-            self.room_popup.dismiss()
-            app.is_online = True
-            app.is_ranked = False
-            app.online_room_id = code_input.text.upper()
-            app.online_color = 'black'
-            app.online_opponent = result.get('opponent', 'Соперник')
-            app.game_screen.new_game()
-            self.manager.current = 'game'
+            def join_req(req, result):
+                self.room_popup.dismiss()
+                app.is_online = True
+                app.is_ranked = False
+                app.online_room_id = code_input.text.upper()
+                app.online_color = 'black'
+                app.online_opponent = result.get('opponent', 'Соперник')
+                app.game_screen.new_game()
+                self.manager.current = 'game'
 
-        btn_create.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/create_room", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'}, on_success=create_req))
-        btn_join.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/join_room", req_body=json.dumps({"login": app.current_user, "room_code": code_input.text.upper()}), req_headers={'Content-Type': 'application/json'}, on_success=join_req, on_error=lambda req, err: Popup(title="Ошибка", content=Label(text="Комната не найдена"), size_hint=(0.8, 0.3)).open()))
-        
-        self.room_popup.open()
+            btn_create.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/create_room", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'}, on_success=create_req))
+            btn_join.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/join_room", req_body=json.dumps({"login": app.current_user, "room_code": code_input.text.upper()}), req_headers={'Content-Type': 'application/json'}, on_success=join_req, on_error=lambda req, err: Popup(title="Ошибка", content=Label(text="Комната не найдена"), size_hint=(0.8, 0.3)).open()))
+            
+            self.room_popup.open()
+
+        def ping_error(req, error):
+            Popup(title="Нет сети", content=Label(text="Невозможно создать комнату.\nПроверьте интернет или сервер."), size_hint=(0.8, 0.3)).open()
+
+        # Отправляем пинг, чтобы проверить, живой ли сервер
+        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_error, timeout=5)
 
     def poll_join(self, room_id):
         app = App.get_running_app()
@@ -781,33 +788,41 @@ class RankedMenuScreen(BackgroundScreen):
 
     def find_online_match(self, instance):
         app = App.get_running_app()
-        self.is_searching = True
         
-        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
-        content.add_widget(Label(text="Ищем соперника...\nПодождите."))
-        
-        btn_cancel = RoundedButton(text="Отменить поиск", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
-        btn_cancel.bind(on_release=self.cancel_search)
-        content.add_widget(btn_cancel)
-        
-        self.waiting_popup = Popup(title="Поиск", content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
-        self.waiting_popup.open()
-        
-        def on_success(req, result):
-            if not self.is_searching: return
-            if result.get('status') == 'waiting':
-                Clock.schedule_once(lambda dt: self.check_match_status(app), 2)
-            elif result.get('status') == 'matched':
+        # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА ИНТЕРНЕТА ПРИ ПОИСКЕ
+        def ping_success(req, result):
+            self.is_searching = True
+            
+            content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+            content.add_widget(Label(text="Ищем соперника...\nПодождите."))
+            
+            btn_cancel = RoundedButton(text="Отменить поиск", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
+            btn_cancel.bind(on_release=self.cancel_search)
+            content.add_widget(btn_cancel)
+            
+            self.waiting_popup = Popup(title="Поиск", content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
+            self.waiting_popup.open()
+            
+            def on_success(req, result):
+                if not self.is_searching: return
+                if result.get('status') == 'waiting':
+                    Clock.schedule_once(lambda dt: self.check_match_status(app), 2)
+                elif result.get('status') == 'matched':
+                    self.is_searching = False
+                    self.start_online_game(result['room_id'], result['color'], result['opponent'], result.get('opponent_elo', 300))
+                    
+            def on_error(req, error):
+                self.waiting_popup.dismiss()
                 self.is_searching = False
-                self.start_online_game(result['room_id'], result['color'], result['opponent'], result.get('opponent_elo', 300))
-                
-        def on_error(req, error):
-            self.waiting_popup.dismiss()
-            self.is_searching = False
-            Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
+                Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
 
-        req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
-        UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
+            req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
+            UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
+
+        def ping_error(req, error):
+            Popup(title="Нет сети", content=Label(text="Не удалось начать поиск.\nПроверьте интернет."), size_hint=(0.8, 0.3)).open()
+
+        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_error, timeout=5)
 
     def cancel_search(self, instance):
         self.is_searching = False
@@ -825,7 +840,10 @@ class RankedMenuScreen(BackgroundScreen):
                 self.is_searching = False
                 self.start_online_game(result['room_id'], result['color'], result['opponent'], result.get('opponent_elo', 300))
             elif result.get('status') == 'waiting':
-                Clock.schedule_once(lambda dt: self.check_match_status(app), 2)
+                # Отправляем повторный запрос на поиск для обновления таймера ожидания на сервере
+                req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
+                UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, 
+                           on_success=lambda r, res: Clock.schedule_once(lambda dt: self.check_match_status(app), 2))
 
         UrlRequest(f"{SERVER_URL}/check_match/{app.current_user}", on_success=on_success)
 
