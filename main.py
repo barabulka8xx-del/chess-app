@@ -32,9 +32,9 @@ from kivy.graphics import Color, RoundedRectangle, Ellipse, Rectangle
 # Регистрация кастомного шрифта для фигур
 LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
-# АДРЕС СЕРВЕРА (наш FastAPI на Waifly)
+# АДРЕС СЕРВЕРА
 SERVER_URL = "http://node.waifly.com:27402"
-# ССЫЛКА НА САЙТ ДЛЯ СКАЧИВАНИЯ (GitHub Pages)
+# ССЫЛКА НА САЙТ ДЛЯ СКАЧИВАНИЯ
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
 
 # ТЕКУЩАЯ ВЕРСИЯ ИГРЫ
@@ -395,7 +395,10 @@ def get_bot_move(s, difficulty):
             best_val = val
             best_move = m
     return best_move
-    # ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
+
+# --- НИЖЕ ВСТАВЬ ЧАСТЬ 2 ---
+
+# ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
@@ -849,6 +852,18 @@ class RankedMenuScreen(BackgroundScreen):
             self.waiting_popup = Popup(title="Поиск", content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
             self.waiting_popup.open()
             
+            def show_update_popup():
+                content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+                content.add_widget(Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16)))
+                btn = RoundedButton(text="Скачать обновление", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
+                def open_site(instance):
+                    self.update_popup.dismiss()
+                    webbrowser.open(SITE_URL) 
+                btn.bind(on_release=open_site)
+                content.add_widget(btn)
+                self.update_popup = Popup(title="Обновление", content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
+                self.update_popup.open()
+
             def on_success(req, result):
                 if not self.is_searching: return
                 if result.get('status') == 'waiting': 
@@ -860,27 +875,22 @@ class RankedMenuScreen(BackgroundScreen):
             def on_error(req, error):
                 self.waiting_popup.dismiss()
                 self.is_searching = False
-                if req.resp_status == 403:
-                    content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-                    content.add_widget(Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16)))
-                    btn = RoundedButton(text="Скачать обновление", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
-                    def open_site(instance):
-                        self.update_popup.dismiss()
-                        webbrowser.open(SITE_URL) 
-                    btn.bind(on_release=open_site)
-                    content.add_widget(btn)
-                    self.update_popup = Popup(title="Обновление", content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
-                    self.update_popup.open()
+                if getattr(req, 'resp_status', None) == 403:
+                    show_update_popup()
                 else: 
                     Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
 
             def on_network_fail(req, error):
                 self.waiting_popup.dismiss()
                 self.is_searching = False
-                Popup(title="Нет сети", content=Label(text="Сервер не отвечает"), size_hint=(0.8, 0.3)).open()
+                if getattr(req, 'resp_status', None) == 403:
+                    show_update_popup()
+                else:
+                    Popup(title="Нет сети", content=Label(text="Сервер не отвечает"), size_hint=(0.8, 0.3)).open()
 
             req_body = json.dumps({"login": app.current_user, "elo": app.player_elo, "version": GAME_VERSION})
             UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error, on_failure=on_network_fail)
+            
         UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_fail, on_failure=ping_fail, timeout=5)
 
     def cancel_search(self, instance):
@@ -1387,7 +1397,6 @@ class GameScreen(Screen):
             app.play_sound()
         if app.is_ranked: self.reset_timer()
         self.update_ui()
-
 
 class ChessApp(App):
     game_mode = '2p'
