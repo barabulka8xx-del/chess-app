@@ -44,7 +44,6 @@ GAME_VERSION = "1.0"
 # ================== КАСТОМНЫЕ ЭЛЕМЕНТЫ UI ==================
 
 class RoundedButton(Button):
-    """Кнопка с закругленными углами и правильным цветом фона."""
     def __init__(self, **kwargs):
         bg_col = kwargs.pop('background_color', (0.4, 0.4, 0.4, 1))
         super().__init__(**kwargs)
@@ -61,7 +60,6 @@ class RoundedButton(Button):
         self.rect.size = self.size
 
 class SquareButton(Button):
-    """Кнопка для клетки шахматной доски."""
     def __init__(self, r, c, **kwargs):
         super().__init__(**kwargs)
         self.r = r
@@ -602,21 +600,18 @@ class MainMenuScreen(BackgroundScreen):
         
         self.main_layout.add_widget(ui_layout)
 
-        # КРУГЛАЯ КНОПКА (i) В ПРАВОМ НИЖНЕМ УГЛУ
         self.info_btn = RoundedButton(
             text="(i)", font_size=dp(20), bold=True,
             size_hint=(None, None), size=(dp(50), dp(50)),
             pos_hint={'right': 0.95, 'y': 0.05},
             background_color=(0.2, 0.5, 0.8, 1)
         )
-        self.info_btn.rect.radius = [dp(25)] # Делаем её круглой
+        self.info_btn.rect.radius = [dp(25)] 
         self.info_btn.bind(on_release=self.show_changelog)
         self.main_layout.add_widget(self.info_btn)
 
     def show_changelog(self, instance):
-        """Окно с историей обновлений."""
         content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
-        
         scroll = ScrollView()
         layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(15))
         layout.bind(minimum_height=layout.setter('height'))
@@ -636,6 +631,9 @@ class MainMenuScreen(BackgroundScreen):
             "• Добавлена ничья при нехватке фигур (Insufficient material).\n"
             "• Исправлен выход текста за края экрана в окнах.\n"
             "• Добавлена кнопка (i) с информацией.\n"
+            "• Исправлена ошибка, из-за которой создатель комнаты не мог начать игру.\n"
+            "• Убран баг с замороженным таймером в дружеских играх.\n"
+            "• Штраф теперь снимается, даже если комната уже удалена.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -650,7 +648,6 @@ class MainMenuScreen(BackgroundScreen):
         popup = Popup(title="О игре", content=content, size_hint=(0.9, 0.8))
         btn_close.bind(on_release=popup.dismiss)
         content.add_widget(btn_close)
-        
         popup.open()
 
     def on_pre_enter(self, *args):
@@ -721,8 +718,6 @@ class MainMenuScreen(BackgroundScreen):
                 if msg and msg != app.last_seen_notification:
                     app.last_seen_notification = msg
                     content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-                    
-                    # ФИКС ПЕРЕНОСА ТЕКСТА
                     notif_lbl = Label(text=msg, halign="center", font_size=dp(18))
                     notif_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
                     content.add_widget(notif_lbl)
@@ -811,14 +806,15 @@ class TwoPlayersMenuScreen(BackgroundScreen):
             
             def create_req(req, result):
                 self.room_popup.dismiss()
-                Popup(title="Комната создана", content=Label(text=f"Код: {result['room_id']}\nЖдем соперника..."), size_hint=(0.8, 0.4)).open()
+                self.waiting_popup = Popup(title="Комната создана", content=Label(text=f"Код: {result['room_id']}\nЖдем соперника..."), size_hint=(0.8, 0.4), auto_dismiss=False)
+                self.waiting_popup.open()
                 self.poll_join(result['room_id'])
 
             def join_req(req, result):
                 self.room_popup.dismiss()
                 app.is_online = True
                 app.is_ranked = False
-                app.online_room_id = code_input.text.upper()
+                app.online_room_id = code_input.text.strip().upper()
                 app.online_color = 'black'
                 app.online_opponent = result.get('opponent', 'Соперник')
                 app.game_screen.new_game()
@@ -831,7 +827,7 @@ class TwoPlayersMenuScreen(BackgroundScreen):
                 Popup(title="Ошибка", content=Label(text="Комната не найдена\nили нет сети"), size_hint=(0.8, 0.3)).open()
 
             btn_create.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/create_room", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'}, on_success=create_req, on_error=create_fail, on_failure=create_fail))
-            btn_join.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/join_room", req_body=json.dumps({"login": app.current_user, "room_code": code_input.text.upper()}), req_headers={'Content-Type': 'application/json'}, on_success=join_req, on_error=join_fail, on_failure=join_fail))
+            btn_join.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/join_room", req_body=json.dumps({"login": app.current_user, "room_code": code_input.text.strip().upper()}), req_headers={'Content-Type': 'application/json'}, on_success=join_req, on_error=join_fail, on_failure=join_fail))
             self.room_popup.open()
 
         UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_fail, on_failure=ping_fail, timeout=5)
@@ -839,7 +835,9 @@ class TwoPlayersMenuScreen(BackgroundScreen):
     def poll_join(self, room_id):
         app = App.get_running_app()
         def check(req, result):
-            if result.get('board_data') is not None:
+            if result.get('players_count', 0) >= 2 or result.get('board_data') is not None:
+                if hasattr(self, 'waiting_popup') and self.waiting_popup:
+                    self.waiting_popup.dismiss()
                 app.is_online = True
                 app.is_ranked = False
                 app.online_room_id = room_id
@@ -901,8 +899,6 @@ class RankedMenuScreen(BackgroundScreen):
             
             def show_update_popup():
                 content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-                
-                # ФИКС ПЕРЕНОСА ТЕКСТА
                 lbl = Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16))
                 lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
                 content.add_widget(lbl)
@@ -1095,19 +1091,21 @@ class GameScreen(Screen):
         else:
             self.match_info_layout.opacity = 0 
             
-        if app.is_ranked or app.is_online:
+        if app.is_ranked:
             self.btn_undo.text = "Без отмены"
             self.btn_undo.disabled = True
             self.btn_undo.background_color = (0.2, 0.2, 0.2, 1)
             app.save_active_game(True) 
+            self.timer_label.text = ""
             self.reset_timer()
         else:
-            self.btn_undo.text = "Отмена"
-            self.btn_undo.disabled = False
-            self.btn_undo.background_color = (0.3, 0.3, 0.3, 1)
+            self.btn_undo.text = "Отмена" if app.game_mode == 'bot' else "Без отмены"
+            self.btn_undo.disabled = False if app.game_mode == 'bot' else True
+            self.btn_undo.background_color = (0.3, 0.3, 0.3, 1) if app.game_mode == 'bot' else (0.2, 0.2, 0.2, 1)
             app.save_active_game(False)
             self.stop_timer()
-            self.timer_label.text = ""
+            self.timer_label.text = "" 
+            
         if app.is_online:
             self.start_polling() 
         self.update_ui()
@@ -1193,9 +1191,13 @@ class GameScreen(Screen):
             penalty = app.calculate_loss_penalty()
             app.player_elo = max(0, app.player_elo - penalty)
             app.save_user_data()
+            
             if app.is_online and app.online_room_id:
                 req_body = json.dumps({"room_id": app.online_room_id, "winner": app.online_opponent, "is_ranked": True})
-                UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'})
+                def finish_fail(req, err):
+                    req_body2 = json.dumps({"login": app.current_user, "elo_change": -penalty})
+                    UrlRequest(f"{SERVER_URL}/update_bot_elo", req_body=req_body2, req_headers={'Content-Type': 'application/json'})
+                UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_error=finish_fail, on_failure=finish_fail)
             else:
                 req_body = json.dumps({"login": app.current_user, "elo_change": -penalty})
                 UrlRequest(f"{SERVER_URL}/update_bot_elo", req_body=req_body, req_headers={'Content-Type': 'application/json'})
@@ -1327,21 +1329,32 @@ class GameScreen(Screen):
         self.stop_timer()
         self.stop_polling()
         app = App.get_running_app()
+        
         if app.is_online and app.online_room_id:
             winner = app.online_opponent
             req_body = json.dumps({"room_id": app.online_room_id, "winner": winner, "is_ranked": app.is_ranked})
+            
             def send_result(req, res):
                 if res and 'players' in res:
                     if app.current_user == res['players'][0]: app.player_elo = res['new_elo_p1']
                     else: app.player_elo = res['new_elo_p2']
                     app.save_user_data()
-            UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=send_result)
+                    
+            def finish_fail(req, err):
+                penalty = app.calculate_loss_penalty() + 10
+                app.player_elo = max(0, app.player_elo - penalty)
+                app.save_user_data()
+                req_body2 = json.dumps({"login": app.current_user, "elo_change": -penalty})
+                UrlRequest(f"{SERVER_URL}/update_bot_elo", req_body=req_body2, req_headers={'Content-Type': 'application/json'})
+                
+            UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=send_result, on_error=finish_fail, on_failure=finish_fail)
         else:
             penalty = app.calculate_loss_penalty() + 10
             app.player_elo = max(0, app.player_elo - penalty)
             app.save_user_data()
             req_body = json.dumps({"login": app.current_user, "elo_change": -penalty})
             UrlRequest(f"{SERVER_URL}/update_bot_elo", req_body=req_body, req_headers={'Content-Type': 'application/json'})
+            
         app.save_active_game(False)
         self.exit_popup.dismiss()
         self.exit_to_menu()
@@ -1416,14 +1429,16 @@ class GameScreen(Screen):
         app = App.get_running_app()
         self.stop_timer()
         app.play_sound()
+        
         if app.is_online:
             UrlRequest(f"{SERVER_URL}/make_move", req_body=json.dumps({
                 "room_id": app.online_room_id, "login": app.current_user, "board_data": json.dumps(self.state) 
             }), req_headers={'Content-Type': 'application/json'}, on_failure=lambda r, e: None)
+            
         self.update_ui()
         if not app.is_online and app.game_mode == 'bot' and game_status(self.state) is None and self.state['turn'] == 'b':
             self.start_bot()
-        elif app.is_online or app.is_ranked:
+        elif app.is_online and app.is_ranked:
             self.reset_timer()
 
     def start_bot(self):
