@@ -360,7 +360,6 @@ class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        # Черный фон
         with self.canvas.before:
             Color(0, 0, 0, 1)
             self.rect = Rectangle(pos=self.pos, size=self.size)
@@ -368,17 +367,14 @@ class LoadingScreen(Screen):
         
         layout = BoxLayout(orientation='vertical', padding=dp(50))
         
-        # Иконка приложения
         self.logo = Image(source='icon.png', size_hint=(1, 0.6), opacity=1)
         layout.add_widget(self.logo)
         
-        # Текст загрузки
         self.status = Label(text="Загрузка...", font_size=dp(24), color=(1,1,1,1), size_hint=(1, 0.4))
         layout.add_widget(self.status)
         
         self.add_widget(layout)
         
-        # Запускаем анимацию пульсации (плавное затухание и появление)
         self.anim = Animation(opacity=0.3, duration=1.0) + Animation(opacity=1.0, duration=1.0)
         self.anim.repeat = True
         self.anim.start(self.logo)
@@ -1351,7 +1347,6 @@ class ChessApp(App):
         self.init_audio()
         
         sm = ScreenManager()
-        # ДОБАВЛЕН ЭКРАН ЗАГРУЗКИ
         sm.add_widget(LoadingScreen(name='loading'))
         
         sm.add_widget(LoginScreen(name='login'))
@@ -1362,10 +1357,8 @@ class ChessApp(App):
         self.game_screen = GameScreen(name='game')
         sm.add_widget(self.game_screen)
         
-        # ЗАПУСКАЕМ С ЭКРАНА ЗАГРУЗКИ
         sm.current = 'loading'
         
-        # Через 3 секунды экран загрузки сам перекинет куда надо
         Clock.schedule_once(lambda dt: sm.get_screen('loading').go_next(None), 3)
             
         return sm
@@ -1501,6 +1494,7 @@ class ChessApp(App):
         if os.path.exists(path):
             self.sound_move = SoundLoader.load(path)
 
+        # ЗАГРУЗКА МУЗЫКИ (Убедись, что файл называется music.ogg)
         self.bg_music = SoundLoader.load('music.ogg')
         if self.bg_music:
             self.bg_music.loop = True
