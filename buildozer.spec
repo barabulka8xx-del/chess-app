@@ -8,7 +8,7 @@ version = 1.0
 
 icon.filename = icon.png
 
-presplash.filename = splash.png
+presplash.filename = icon.png
 
 requirements = python3==3.10.13, hostpython3==3.10.13, kivy==2.3.0, cython==0.29.33
 
