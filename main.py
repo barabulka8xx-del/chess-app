@@ -25,12 +25,34 @@ from kivy.metrics import dp
 from kivy.core.text import LabelBase
 from kivy.animation import Animation
 from kivy.network.urlrequest import UrlRequest
+from kivy.graphics import Color, RoundedRectangle, Ellipse
 
 # РЕГИСТРАЦИЯ ШРИФТА
 LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 # АДРЕС ТВОЕГО СЕРВЕРА
 SERVER_URL = "http://node.waifly.com:27402"
+
+# ================== КАСТОМНАЯ КНОПКА ==================
+class RoundedButton(Button):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ''
+        self.background_down = ''
+        self.canvas.before.clear() # Убираем стандартный фон Kivy
+        
+        with self.canvas.before:
+            self.bg_color = Color(rgba=self.background_color)
+            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(15)])
+            
+        self.bind(pos=self.update_rect, size=self.update_rect, background_color=self.update_color)
+        
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+        
+    def update_color(self, *args):
+        self.bg_color.rgba = self.background_color
 
 # ================== ЛОГИКА ШАХМАТ ==================
 KNIGHT_OFF = [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]
@@ -315,6 +337,23 @@ class SquareButton(Button):
         self.font_name = 'ChessFont'
         self.background_normal = ''
         self.background_color = (1, 1, 1, 1)
+        
+        with self.canvas.before:
+            self.dot_color = Color(0, 0, 0, 0)
+            self.dot = Ellipse(size=(0, 0))
+            
+        self.bind(pos=self.update_dot, size=self.update_dot)
+
+    def update_dot(self, *args):
+        dot_size = self.width * 0.25
+        self.dot.size = (dot_size, dot_size)
+        self.dot.pos = (self.center_x - dot_size/2, self.center_y - dot_size/2)
+
+    def show_dot(self, visible):
+        if visible:
+            self.dot_color.rgba = (0, 0, 0, 0.5)
+        else:
+            self.dot_color.rgba = (0, 0, 0, 0)
 
 class ChessBoard(GridLayout):
     def __init__(self, **kwargs):
@@ -341,6 +380,7 @@ class ChessBoard(GridLayout):
         for (r, c), btn in self.squares.items():
             btn.background_color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
             btn.text = ""
+            btn.show_dot(False)
             
         piece_map = {
             'K':'♚','Q':'♛','R':'♜','B':'♝','N':'♞','P':'♟', 
@@ -365,10 +405,7 @@ class ChessBoard(GridLayout):
             
         for m in legal_targets:
             tr, tc = m[2], m[3]
-            if board[tr][tc] != '.' or m[5]=='ep':
-                self.squares[(tr,tc)].background_color = (0.8, 0.3, 0.3, 0.8)
-            else:
-                self.squares[(tr,tc)].background_color = (0.6, 0.8, 0.6, 0.8)
+            self.squares[(tr,tc)].show_dot(True)
 
 class LoginScreen(BackgroundScreen):
     def __init__(self, **kwargs):
@@ -389,11 +426,11 @@ class LoginScreen(BackgroundScreen):
         self.status_label = Label(text="", color=(1, 0.3, 0.3, 1), size_hint_y=0.1)
         layout.add_widget(self.status_label)
         
-        self.submit_btn = Button(text="Войти", size_hint_y=0.15, font_size=dp(20), background_color=(0.2, 0.6, 0.2, 1))
+        self.submit_btn = RoundedButton(text="Войти", size_hint_y=0.15, font_size=dp(20), background_color=(0.2, 0.6, 0.2, 1))
         self.submit_btn.bind(on_release=self.handle_submit)
         layout.add_widget(self.submit_btn)
         
-        self.toggle_btn = Button(text="Нет аккаунта? Регистрация", size_hint_y=0.1, font_size=dp(16), background_color=(0.3, 0.3, 0.3, 1))
+        self.toggle_btn = RoundedButton(text="Нет аккаунта? Регистрация", size_hint_y=0.1, font_size=dp(16), background_color=(0.3, 0.3, 0.3, 1))
         self.toggle_btn.bind(on_release=self.toggle_mode)
         layout.add_widget(self.toggle_btn)
         
@@ -462,19 +499,19 @@ class MainMenuScreen(BackgroundScreen):
         self.elo_label = Label(text="", font_size=dp(22), color=(1, 0.8, 0.2, 1), size_hint_y=0.08)
         ui_layout.add_widget(self.elo_label)
         
-        btn_2p = Button(text="2 Игрока", font_size=dp(20), size_hint_y=0.12)
+        btn_2p = RoundedButton(text="2 Игрока", font_size=dp(20), size_hint_y=0.12)
         btn_2p.bind(on_release=lambda x: self.start_game('2p'))
         ui_layout.add_widget(btn_2p)
         
-        btn_bot = Button(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.12)
+        btn_bot = RoundedButton(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.12)
         btn_bot.bind(on_release=lambda x: self.start_bot_menu())
         ui_layout.add_widget(btn_bot)
         
-        btn_ranked = Button(text="Ранговый матч", font_size=dp(20), size_hint_y=0.12, background_color=(0.2, 0.5, 0.8, 1))
+        btn_ranked = RoundedButton(text="Ранговый матч", font_size=dp(20), size_hint_y=0.12, background_color=(0.2, 0.5, 0.8, 1))
         btn_ranked.bind(on_release=lambda x: setattr(self.manager, 'current', 'ranked_menu'))
         ui_layout.add_widget(btn_ranked)
         
-        btn_logout = Button(text="Выйти из аккаунта", font_size=dp(14), size_hint_y=0.08, background_color=(0.5, 0.2, 0.2, 1))
+        btn_logout = RoundedButton(text="Выйти из аккаунта", font_size=dp(14), size_hint_y=0.08, background_color=(0.5, 0.2, 0.2, 1))
         btn_logout.bind(on_release=self.logout)
         ui_layout.add_widget(btn_logout)
         
@@ -495,6 +532,7 @@ class MainMenuScreen(BackgroundScreen):
         app = App.get_running_app()
         app.current_user = None
         app.player_elo = 300
+        app.logout_session()
         self.manager.current = 'login'
 
     def start_game(self, mode):
@@ -519,23 +557,22 @@ class RankedMenuScreen(BackgroundScreen):
         layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20), size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
         layout.add_widget(Label(text="Ранговый матч", font_size=dp(30), bold=True, size_hint_y=0.15))
         
-        btn_find = Button(text="Найти соперника (Онлайн)", font_size=dp(20), size_hint_y=0.15, background_color=(0.2, 0.6, 0.8, 1))
+        btn_find = RoundedButton(text="Найти соперника (Онлайн)", font_size=dp(20), size_hint_y=0.15, background_color=(0.2, 0.6, 0.8, 1))
         btn_find.bind(on_release=self.find_online_match)
         layout.add_widget(btn_find)
         
-        btn_room = Button(text="Игра по коду (Друзья)", font_size=dp(20), size_hint_y=0.15, background_color=(0.8, 0.5, 0.2, 1))
+        btn_room = RoundedButton(text="Игра по коду (Друзья)", font_size=dp(20), size_hint_y=0.15, background_color=(0.8, 0.5, 0.2, 1))
         btn_room.bind(on_release=self.show_room_menu)
         layout.add_widget(btn_room)
         
-        btn_bot = Button(text="С Ботом", font_size=dp(20), size_hint_y=0.15)
+        btn_bot = RoundedButton(text="С Ботом", font_size=dp(20), size_hint_y=0.15)
         btn_bot.bind(on_release=self.start_ranked_bot)
         layout.add_widget(btn_bot)
         
-        btn_back = Button(text="Назад", font_size=dp(20), size_hint_y=0.15, background_color=(0.5, 0.2, 0.2, 1))
+        btn_back = RoundedButton(text="Назад", font_size=dp(20), size_hint_y=0.15, background_color=(0.5, 0.2, 0.2, 1))
         btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main_menu'))
         layout.add_widget(btn_back)
         
-        # Статус сервера (внизу)
         self.server_status_label = Label(text="проверка сервера...", font_size=dp(12), color=(1, 1, 0, 1), size_hint_y=0.1)
         layout.add_widget(self.server_status_label)
         
@@ -548,11 +585,11 @@ class RankedMenuScreen(BackgroundScreen):
     def check_server_status(self):
         def on_success(req, result):
             self.server_status_label.text = "сервер онлайн"
-            self.server_status_label.color = (0, 1, 0, 1) # Зеленый
+            self.server_status_label.color = (0, 1, 0, 1)
 
         def on_error(req, error):
             self.server_status_label.text = "сервер офлайн"
-            self.server_status_label.color = (1, 0, 0, 1) # Красный
+            self.server_status_label.color = (1, 0, 0, 1)
 
         UrlRequest(f"{SERVER_URL}/ping", on_success=on_success, on_error=on_error, timeout=5)
 
@@ -563,7 +600,7 @@ class RankedMenuScreen(BackgroundScreen):
         content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
         content.add_widget(Label(text="Ищем соперника...\nПодождите."))
         
-        btn_cancel = Button(text="Отменить поиск", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
+        btn_cancel = RoundedButton(text="Отменить поиск", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
         btn_cancel.bind(on_release=self.cancel_search)
         content.add_widget(btn_cancel)
         
@@ -624,8 +661,8 @@ class RankedMenuScreen(BackgroundScreen):
 
     def show_room_menu(self, instance):
         content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
-        btn_create = Button(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
-        btn_join = Button(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
+        btn_create = RoundedButton(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
+        btn_join = RoundedButton(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
         code_input = TextInput(hint_text="Код комнаты", multiline=False, size_hint_y=None, height=dp(50))
         
         content.add_widget(btn_create)
@@ -689,11 +726,11 @@ class BotMenuScreen(BackgroundScreen):
         layout.add_widget(Label(text="Сложность", font_size=dp(30), size_hint_y=0.3))
         
         for diff, text in [(1, "Легкий"), (2, "Средний"), (3, "Сложный")]:
-            btn = Button(text=text, font_size=dp(20), size_hint_y=0.15)
+            btn = RoundedButton(text=text, font_size=dp(20), size_hint_y=0.15)
             btn.bind(on_release=lambda x, d=diff: self.start_bot(d))
             layout.add_widget(btn)
             
-        btn_back = Button(text="Назад", font_size=dp(20), size_hint_y=0.15, background_color=(0.5, 0.2, 0.2, 1))
+        btn_back = RoundedButton(text="Назад", font_size=dp(20), size_hint_y=0.15, background_color=(0.5, 0.2, 0.2, 1))
         btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main_menu'))
         layout.add_widget(btn_back)
         self.main_layout.add_widget(layout)
@@ -730,7 +767,7 @@ class GameScreen(Screen):
         main_layout = BoxLayout(orientation='vertical')
         
         top_bar = BoxLayout(size_hint=(1, None), height=dp(60), spacing=dp(5), padding=dp(5))
-        btn_menu = Button(text="Меню", font_size=dp(16))
+        btn_menu = RoundedButton(text="Меню", font_size=dp(16))
         btn_menu.bind(on_release=self.go_to_menu)
         top_bar.add_widget(btn_menu)
         
@@ -740,7 +777,7 @@ class GameScreen(Screen):
         self.timer_label = Label(text="", font_size=dp(18), bold=True, color=(1, 0.5, 0.5, 1))
         top_bar.add_widget(self.timer_label)
         
-        self.btn_undo = Button(text="Отмена", font_size=dp(16))
+        self.btn_undo = RoundedButton(text="Отмена", font_size=dp(16))
         self.btn_undo.bind(on_release=self.undo_move)
         top_bar.add_widget(self.btn_undo)
         
@@ -945,7 +982,7 @@ class GameScreen(Screen):
         content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
         content.add_widget(Label(text=text, halign="center", font_size=dp(18)))
         
-        btn = Button(text="В меню", size_hint_y=None, height=dp(50))
+        btn = RoundedButton(text="В меню", size_hint_y=None, height=dp(50))
         content.add_widget(btn)
         
         popup = Popup(title=title, content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
@@ -990,11 +1027,11 @@ class GameScreen(Screen):
         
         btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
         
-        btn_yes = Button(text="Да, выйти", background_color=(0.8, 0.2, 0.2, 1))
+        btn_yes = RoundedButton(text="Да, выйти", background_color=(0.8, 0.2, 0.2, 1))
         btn_yes.bind(on_release=self.apply_exit_penalty)
         btn_layout.add_widget(btn_yes)
         
-        btn_no = Button(text="Продолжить игру", background_color=(0.2, 0.6, 0.2, 1))
+        btn_no = RoundedButton(text="Продолжить игру", background_color=(0.2, 0.6, 0.2, 1))
         btn_no.bind(on_release=lambda x: self.exit_popup.dismiss())
         btn_layout.add_widget(btn_no)
         
@@ -1066,7 +1103,7 @@ class GameScreen(Screen):
         content.add_widget(Label(text="Выберите фигуру:"))
         btn_layout = BoxLayout(spacing=dp(10))
         for pr in ['Q', 'R', 'B', 'N']:
-            btn = Button(text=pr, font_size=dp(30), font_name='ChessFont')
+            btn = RoundedButton(text=pr, font_size=dp(30), font_name='ChessFont')
             btn.bind(on_release=lambda x, p=pr: self.finish_promotion(m, p))
             btn_layout.add_widget(btn)
         content.add_widget(btn_layout)
@@ -1154,6 +1191,12 @@ class ChessApp(App):
         sm.add_widget(RankedMenuScreen(name='ranked_menu'))
         self.game_screen = GameScreen(name='game')
         sm.add_widget(self.game_screen)
+        
+        if self.load_session():
+            sm.current = 'main_menu'
+        else:
+            sm.current = 'login'
+            
         return sm
 
     def on_start(self):
@@ -1184,7 +1227,7 @@ class ChessApp(App):
                     content = BoxLayout(orientation='vertical', padding=dp(10))
                     content.add_widget(Label(text=f"Вы принудительно закрыли игру!\n\nПотеряно {penalty} ЭЛО.\nВаш рейтинг: {self.player_elo}", halign="center"))
                     popup = Popup(title="Штраф", content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
-                    btn = Button(text="Понятно", size_hint_y=None, height=dp(50))
+                    btn = RoundedButton(text="Понятно", size_hint_y=None, height=dp(50))
                     btn.bind(on_release=popup.dismiss)
                     content.add_widget(btn)
                     popup.open()
@@ -1209,6 +1252,36 @@ class ChessApp(App):
             extra = ((elo - 600) // 100 + 1) * 5
             return base + extra
         return base
+
+    def save_session(self):
+        path = os.path.join(self.user_data_dir, 'session.json')
+        try:
+            with open(path, 'w') as f:
+                json.dump({'login': self.current_user}, f)
+        except: pass
+
+    def load_session(self):
+        path = os.path.join(self.user_data_dir, 'session.json')
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                    login = data.get('login')
+                    if login:
+                        db = self.load_db()
+                        if login in db:
+                            self.current_user = login
+                            self.player_elo = db[login].get('elo', 300)
+                            return True
+            except: pass
+        return False
+
+    def logout_session(self):
+        path = os.path.join(self.user_data_dir, 'session.json')
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except: pass
 
     def get_db_path(self):
         return os.path.join(self.user_data_dir, 'users.json')
@@ -1248,6 +1321,7 @@ class ChessApp(App):
             return False, "Неверный пароль"
         self.current_user = login
         self.player_elo = db[login].get('elo', 300)
+        self.save_session()
         return True, "OK"
 
     def save_user_data(self):
