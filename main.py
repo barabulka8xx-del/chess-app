@@ -395,8 +395,7 @@ def get_bot_move(s, difficulty):
             best_val = val
             best_move = m
     return best_move
-
-# ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
+    # ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
@@ -598,7 +597,7 @@ class MainMenuScreen(BackgroundScreen):
         btn_ranked = RoundedButton(text="Ранговый матч", font_size=dp(20), size_hint_y=0.11, background_color=(0.2, 0.5, 0.8, 1))
         btn_ranked.bind(on_release=lambda x: self.start_ranked())
         ui_layout.add_widget(btn_ranked)
-        self.admin_btn = RoundedButton(text="📢 Отправить уведомление", font_size=dp(14), size_hint_y=0.08, background_color=(0.8, 0.2, 0.8, 1))
+        self.admin_btn = RoundedButton(text="Отправить уведомление", font_size=dp(14), size_hint_y=0.08, background_color=(0.8, 0.2, 0.8, 1))
         self.admin_btn.bind(on_release=self.show_admin_panel)
         ui_layout.add_widget(self.admin_btn)
         btn_logout = RoundedButton(text="Выйти", font_size=dp(14), size_hint_y=0.08, background_color=(0.5, 0.2, 0.2, 1))
@@ -631,7 +630,8 @@ class MainMenuScreen(BackgroundScreen):
             def sync_fail(req, error):
                 self.elo_label.text = f"ЭЛО: {app.player_elo} (Нет сети)"
                 self.elo_label.color = (0.8, 0.5, 0.2, 1)
-            UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success, on_error=sync_fail, on_failure=sync_fail)
+            if app.current_user:
+                UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success, on_error=sync_fail, on_failure=sync_fail)
             self.check_developer_notification()
         app.play_music()
 
@@ -959,7 +959,7 @@ class BotMenuScreen(BackgroundScreen):
         app.game_screen.new_game()
         self.manager.current = 'game'
 
-# --- НИЖЕ ВСТАВЬ ЧАСТЬ 2 ---class GameScreen(Screen):
+class GameScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.state = start_state() 
@@ -1096,7 +1096,7 @@ class BotMenuScreen(BackgroundScreen):
         my_color = 'w' if not hasattr(app, 'online_color') else ('w' if app.online_color == 'white' else 'b')
         if self.state['turn'] != my_color: return
         self.timer_label.color = (1, 0.5, 0.5, 1)
-        self.timer_label.text = f"⏳ {self.time_left}с"
+        self.timer_label.text = f"Время: {self.time_left}с"
         self.timer_event = Clock.schedule_interval(self.tick_timer, 1)
 
     def stop_timer(self):
@@ -1111,10 +1111,10 @@ class BotMenuScreen(BackgroundScreen):
         self.time_left -= 1
         if self.time_left <= 5:
             self.timer_label.color = (1, 0, 0, 1)
-            self.timer_label.text = f"⚠️ {self.time_left}с"
+            self.timer_label.text = f"Осталось: {self.time_left}с"
         else:
             self.timer_label.color = (1, 0.5, 0.5, 1)
-            self.timer_label.text = f"⏳ {self.time_left}с"
+            self.timer_label.text = f"Время: {self.time_left}с"
         if self.time_left <= 0:
             self.stop_timer()
             self.time_out_loss()
@@ -1553,14 +1553,18 @@ class ChessApp(App):
                 with open(path, 'wb') as f:
                     f.write(buf.getvalue())
             except: pass
-        if os.path.exists(path):
-            self.sound_move = SoundLoader.load(path)
+            
+        try:
+            if os.path.exists(path):
+                self.sound_move = SoundLoader.load(path)
 
-        self.bg_music = SoundLoader.load('music.ogg')
-        if self.bg_music:
-            self.bg_music.loop = True
-            self.bg_music.volume = 0.3
-            self.play_music()
+            self.bg_music = SoundLoader.load('music.ogg')
+            if self.bg_music:
+                self.bg_music.loop = True
+                self.bg_music.volume = 0.3
+                self.play_music()
+        except:
+            pass
 
     def play_music(self):
         if self.bg_music and self.bg_music.state != 'play':
