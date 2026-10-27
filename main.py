@@ -8,6 +8,7 @@ import io
 import wave
 import struct
 import math
+import webbrowser
 
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
@@ -32,25 +33,24 @@ LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 # АДРЕС ТВОЕГО СЕРВЕРА
 SERVER_URL = "http://node.waifly.com:27402"
+# ССЫЛКА НА ТВОЙ САЙТ
+SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
+
+# ВЕРСИЯ ИГРЫ
+GAME_VERSION = "1.0"
 
 # ================== КАСТОМНЫЕ КНОПКИ ==================
 class RoundedButton(Button):
     def __init__(self, **kwargs):
         bg_col = kwargs.pop('background_color', (0.4, 0.4, 0.4, 1))
-        
         super().__init__(**kwargs)
         self.background_normal = ''
         self.background_down = ''
-        
-        # Прозрачный фон для проявления скруглений
         self.background_color = (0, 0, 0, 0)
-        
         with self.canvas.before:
             self.bg_color = Color(rgba=bg_col)
             self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(15)])
-            
         self.bind(pos=self.update_rect, size=self.update_rect)
-        
     def update_rect(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
@@ -64,31 +64,23 @@ class SquareButton(Button):
         self.font_name = 'ChessFont'
         self.background_normal = ''
         self.background_color = (0, 0, 0, 0)
-        
         with self.canvas.before:
             self.sq_color = Color(rgba=(0.93, 0.84, 0.72, 1))
             self.sq_rect = Rectangle(pos=self.pos, size=self.size)
             self.dot_color = Color(0, 0, 0, 0)
             self.dot = Ellipse(size=(0, 0))
-            
         self.bind(pos=self.update_graphics, size=self.update_graphics)
-        
     def update_graphics(self, *args):
         self.sq_rect.pos = self.pos
         self.sq_rect.size = self.size
-        
         dot_size = self.width * 0.25
         self.dot.size = (dot_size, dot_size)
         self.dot.pos = (self.center_x - dot_size/2, self.center_y - dot_size/2)
-        
     def set_bg_color(self, color):
         self.sq_color.rgba = color
-        
     def show_dot(self, visible):
-        if visible:
-            self.dot_color.rgba = (0, 0, 0, 0.5)
-        else:
-            self.dot_color.rgba = (0, 0, 0, 0)
+        if visible: self.dot_color.rgba = (0, 0, 0, 0.5)
+        else: self.dot_color.rgba = (0, 0, 0, 0)
 
 # ================== ЛОГИКА ШАХМАТ ==================
 KNIGHT_OFF = [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]
@@ -261,7 +253,6 @@ def apply_move(s, m):
     piece = b[fr][fc]
     color = 'w' if piece.isupper() else 'b'
     captured = b[tr][tc]
-    
     if piece=='K': ns['castle_wk']=ns['castle_wq']=False
     if piece=='k': ns['castle_bk']=ns['castle_bq']=False
     if piece=='R':
@@ -276,25 +267,20 @@ def apply_move(s, m):
     if captured=='r':
         if (tr,tc)==(0,0): ns['castle_bq']=False
         if (tr,tc)==(0,7): ns['castle_bk']=False
-        
     ns['ep'] = None
     if piece.upper()=='P' and abs(tr-fr)==2:
         ns['ep'] = ((fr+tr)//2, fc)
-        
     if sp=='ep':
         if color=='w': b[tr+1][tc] = '.'
         else: b[tr-1][tc] = '.'
-        
     b[tr][tc] = promo if promo else piece
     b[fr][fc] = '.'
-    
     if sp=='O-O':
         if color=='w': b[7][5]=b[7][7]; b[7][7]='.'
         else: b[0][5]=b[0][7]; b[0][7]='.'
     elif sp=='O-O-O':
         if color=='w': b[7][3]=b[7][0]; b[7][0]='.'
         else: b[0][3]=b[0][0]; b[0][0]='.'
-        
     ns['turn'] = 'b' if color=='w' else 'w'
     pawn_or_cap = (piece.upper()=='P') or (captured != '.')
     ns['halfmove'] = 0 if pawn_or_cap else s['halfmove']+1
@@ -353,9 +339,9 @@ def get_bot_move(s, difficulty):
         val = minimax(apply_move(s, m), 2, -float('inf'), float('inf'), True)
         val += random.randint(-10, 10)
         if val < best_val: best_val = val; best_move = m
-    return best_move
-    # ================== KIVY UI ==================
+    return best_move# ================== KIVY UI ==================
 
+# ЭКРАН ЗАГРУЗКИ (Иконка на фоне)
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -412,7 +398,7 @@ class ChessBoard(GridLayout):
         for r in range(8):
             for c in range(8):
                 color = (0.93, 0.84, 0.72, 1) if (r+c)%2==0 else (0.71, 0.53, 0.39, 1)
-                btn = SquareButton(r, c, text="")
+                btn = SquareButton(r, c, text="", background_color=color)
                 btn.bind(on_release=self.on_square_click)
                 self.squares[(r,c)] = btn
                 self.add_widget(btn)
@@ -527,8 +513,8 @@ class LoginScreen(BackgroundScreen):
             self.status_label.text = "Заполните все поля!"
             return
             
-        if not re.match(r'^[A-Za-z0-9_]{3,20}$', login):
-            self.status_label.text = "Только англ. буквы, цифры и _ (3-20 симв.)!"
+        if not re.match(r'^[A-Za-z0-9_$#.]{3,20}$', login):
+            self.status_label.text = "Недопустимые символы в логине!"
             return
 
         self.status_label.text = "Подключение к серверу..."
@@ -580,38 +566,46 @@ class MainMenuScreen(BackgroundScreen):
         super().__init__(**kwargs)
         
         ui_layout = BoxLayout(
-            orientation='vertical', padding=dp(20), spacing=dp(10),
-            size_hint=(0.8, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.45}
+            orientation='vertical', padding=dp(20), spacing=dp(8),
+            size_hint=(0.8, 0.95), pos_hint={'center_x': 0.5, 'center_y': 0.45}
         )
         
         self.user_label = Label(text="", font_size=dp(18), color=(1, 1, 1, 1), size_hint_y=0.08)
         ui_layout.add_widget(self.user_label)
         
-        title = Label(text="Шахматы", font_size=dp(40), bold=True, size_hint_y=0.15)
+        title = Label(text="Шахматы", font_size=dp(36), bold=True, size_hint_y=0.12)
         ui_layout.add_widget(title)
         
         self.elo_label = Label(text="", font_size=dp(22), color=(1, 0.8, 0.2, 1), size_hint_y=0.08)
         ui_layout.add_widget(self.elo_label)
         
-        btn_2p = RoundedButton(text="2 Игрока", font_size=dp(20), size_hint_y=0.12, background_color=(0.2, 0.6, 0.2, 1))
+        btn_2p = RoundedButton(text="2 Игрока", font_size=dp(20), size_hint_y=0.11, background_color=(0.2, 0.6, 0.2, 1))
         btn_2p.bind(on_release=lambda x: setattr(self.manager, 'current', 'two_players_menu'))
         ui_layout.add_widget(btn_2p)
         
-        btn_bot = RoundedButton(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.12, background_color=(0.8, 0.5, 0.2, 1))
+        btn_bot = RoundedButton(text="Игра с Ботом", font_size=dp(20), size_hint_y=0.11, background_color=(0.8, 0.5, 0.2, 1))
         btn_bot.bind(on_release=lambda x: self.start_bot_menu())
         ui_layout.add_widget(btn_bot)
         
-        btn_ranked = RoundedButton(text="Ранговый матч", font_size=dp(20), size_hint_y=0.12, background_color=(0.2, 0.5, 0.8, 1))
+        btn_ranked = RoundedButton(text="Ранговый матч", font_size=dp(20), size_hint_y=0.11, background_color=(0.2, 0.5, 0.8, 1))
         btn_ranked.bind(on_release=lambda x: self.start_ranked())
         ui_layout.add_widget(btn_ranked)
+        
+        self.admin_btn = RoundedButton(text="📢 Отправить уведомление", font_size=dp(14), size_hint_y=0.08, background_color=(0.8, 0.2, 0.8, 1))
+        self.admin_btn.bind(on_release=self.show_admin_panel)
+        ui_layout.add_widget(self.admin_btn)
         
         btn_logout = RoundedButton(text="Выйти", font_size=dp(14), size_hint_y=0.08, background_color=(0.5, 0.2, 0.2, 1))
         btn_logout.bind(on_release=self.logout)
         ui_layout.add_widget(btn_logout)
         
-        ui_layout.add_widget(Label(size_hint_y=0.1))
+        ui_layout.add_widget(Label(size_hint_y=0.05))
         
-        signature = Label(text="Сделано Kirillom Der**", font_size=dp(12), color=(0.7, 0.7, 0.7, 1), size_hint_y=0.08)
+        # Отображаем версию игры в углу
+        version_label = Label(text=f"v{GAME_VERSION}", font_size=dp(10), color=(0.5, 0.5, 0.5, 1), size_hint_y=0.05)
+        ui_layout.add_widget(version_label)
+        
+        signature = Label(text="Сделано Kirillom Der**", font_size=dp(12), color=(0.7, 0.7, 0.7, 1), size_hint_y=0.05)
         ui_layout.add_widget(signature)
         
         self.main_layout.add_widget(ui_layout)
@@ -620,6 +614,13 @@ class MainMenuScreen(BackgroundScreen):
         app = App.get_running_app()
         self.user_label.text = f"Вы вошли как: {app.current_user}"
         
+        if app.current_user == "DEV$DEV":
+            self.admin_btn.opacity = 1
+            self.admin_btn.disabled = False
+        else:
+            self.admin_btn.opacity = 0
+            self.admin_btn.disabled = True
+
         if app.is_offline:
             self.elo_label.text = "ЭЛО: Недоступно (Офлайн)"
             self.elo_label.color = (0.5, 0.5, 0.5, 1)
@@ -631,8 +632,84 @@ class MainMenuScreen(BackgroundScreen):
                 self.elo_label.color = (1, 0.8, 0.2, 1)
                 
             UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success)
+            self.check_developer_notification()
             
         app.play_music()
+
+    def show_admin_panel(self, instance):
+        content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+        
+        input_text = TextInput(hint_text="Текст уведомления для игроков...", multiline=False, size_hint_y=None, height=dp(50))
+        content.add_widget(input_text)
+        
+        btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
+        
+        popup = Popup(title="Рассылка", content=content, size_hint=(0.8, 0.4))
+        
+        def send_notification(req_inst):
+            msg = input_text.text.strip()
+            if not msg: return
+            req_body = json.dumps({"login": "DEV$DEV", "password": "AKS.2GmOZx#Z", "message": msg})
+            
+            def on_success(req, res):
+                popup.dismiss()
+                app = App.get_running_app()
+                app.last_seen_notification = None
+                Popup(title="Успех", content=Label(text="Уведомление разослано!"), size_hint=(0.8, 0.3)).open()
+            
+            UrlRequest(f"{SERVER_URL}/admin/send_update", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+
+        def clear_notification(req_inst):
+            req_body = json.dumps({"login": "DEV$DEV", "password": "AKS.2GmOZx#Z", "message": ""})
+            
+            def on_success(req, res):
+                popup.dismiss()
+                Popup(title="Успех", content=Label(text="Уведомления отключены."), size_hint=(0.8, 0.3)).open()
+                
+            UrlRequest(f"{SERVER_URL}/admin/clear_notification", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+        
+        btn_send = RoundedButton(text="Отправить", background_color=(0.2, 0.6, 0.2, 1))
+        btn_send.bind(on_release=send_notification)
+        btn_layout.add_widget(btn_send)
+        
+        btn_clear = RoundedButton(text="Отключить", background_color=(0.8, 0.2, 0.2, 1))
+        btn_clear.bind(on_release=clear_notification)
+        btn_layout.add_widget(btn_clear)
+        
+        content.add_widget(btn_layout)
+        popup.open()
+
+    def check_developer_notification(self):
+        def on_success(req, result):
+            app = App.get_running_app()
+            if result and result.get('active'):
+                msg = result.get('message', '')
+                if msg and msg != app.last_seen_notification:
+                    app.last_seen_notification = msg
+                    
+                    content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+                    content.add_widget(Label(text=msg, halign="center", font_size=dp(18)))
+                    
+                    btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
+                    
+                    btn_old = RoundedButton(text="Играть на старой", background_color=(0.3, 0.3, 0.3, 1))
+                    btn_old.bind(on_release=lambda x: popup.dismiss())
+                    btn_layout.add_widget(btn_old)
+                    
+                    btn_new = RoundedButton(text="Скачать новую", background_color=(0.2, 0.6, 0.2, 1))
+                    
+                    def open_site(instance):
+                        popup.dismiss()
+                        webbrowser.open(SITE_URL)
+                        
+                    btn_new.bind(on_release=open_site)
+                    btn_layout.add_widget(btn_new)
+                    
+                    content.add_widget(btn_layout)
+                    popup = Popup(title="Обновление!", content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
+                    popup.open()
+
+        UrlRequest(f"{SERVER_URL}/get_notification", on_success=on_success)
 
     def logout(self, instance):
         app = App.get_running_app()
@@ -692,9 +769,7 @@ class TwoPlayersMenuScreen(BackgroundScreen):
             Popup(title="Офлайн", content=Label(text="Онлайн по коду недоступен\nбез интернета."), size_hint=(0.8, 0.3)).open()
             return
 
-        # ПРОВЕРКА СЕРВЕРА ПЕРЕД СОЗДАНИЕМ КОМНАТЫ
         def ping_success(req, result):
-            # Если сервер ответил, показываем меню комнат
             content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
             btn_create = RoundedButton(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
             btn_join = RoundedButton(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
@@ -726,16 +801,12 @@ class TwoPlayersMenuScreen(BackgroundScreen):
             
             self.room_popup.open()
 
-        def ping_error(req, error):
-            Popup(title="Нет сети", content=Label(text="Невозможно создать комнату.\nПроверьте интернет или сервер."), size_hint=(0.8, 0.3)).open()
-
-        # Отправляем пинг, чтобы проверить, живой ли сервер
-        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_error, timeout=5)
+        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=lambda r, e: Popup(title="Нет сети", content=Label(text="Сервер недоступен."), size_hint=(0.8, 0.3)).open(), timeout=5)
 
     def poll_join(self, room_id):
         app = App.get_running_app()
         def check(req, result):
-            if result.get('last_move') is not None:
+            if result.get('board_data') is not None:
                 app.is_online = True
                 app.is_ranked = False
                 app.online_room_id = room_id
@@ -789,7 +860,6 @@ class RankedMenuScreen(BackgroundScreen):
     def find_online_match(self, instance):
         app = App.get_running_app()
         
-        # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА ИНТЕРНЕТА ПРИ ПОИСКЕ
         def ping_success(req, result):
             self.is_searching = True
             
@@ -814,15 +884,35 @@ class RankedMenuScreen(BackgroundScreen):
             def on_error(req, error):
                 self.waiting_popup.dismiss()
                 self.is_searching = False
-                Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
+                
+                # ЕСЛИ СЕРВЕР ВЕРНУЛ 403 (ЗНАЧИТ ВЕРСИЯ УСТАРЕЛА)
+                if req.resp_status == 403:
+                    content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+                    content.add_widget(Label(text="Вышло обновление игры!\nПожалуйста, скачайте новую версию, чтобы играть в ранговый матч.", halign="center", font_size=dp(16)))
+                    
+                    btn = RoundedButton(text="Скачать обновление", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
+                    
+                    def open_site(instance):
+                        self.update_popup.dismiss()
+                        webbrowser.open(SITE_URL)
+                        
+                    btn.bind(on_release=open_site)
+                    content.add_widget(btn)
+                    
+                    self.update_popup = Popup(title="Обновление", content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
+                    self.update_popup.open()
+                else:
+                    Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
 
-            req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
+            # ОТПРАВЛЯЕМ ВЕРСИЮ ВМЕСТЕ С ЗАПРОСОМ
+            req_body = json.dumps({
+                "login": app.current_user, 
+                "elo": app.player_elo,
+                "version": GAME_VERSION
+            })
             UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
 
-        def ping_error(req, error):
-            Popup(title="Нет сети", content=Label(text="Не удалось начать поиск.\nПроверьте интернет."), size_hint=(0.8, 0.3)).open()
-
-        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=ping_error, timeout=5)
+        UrlRequest(f"{SERVER_URL}/ping", on_success=ping_success, on_error=lambda r, e: Popup(title="Нет сети", content=Label(text="Проверьте интернет."), size_hint=(0.8, 0.3)).open(), timeout=5)
 
     def cancel_search(self, instance):
         self.is_searching = False
@@ -840,8 +930,11 @@ class RankedMenuScreen(BackgroundScreen):
                 self.is_searching = False
                 self.start_online_game(result['room_id'], result['color'], result['opponent'], result.get('opponent_elo', 300))
             elif result.get('status') == 'waiting':
-                # Отправляем повторный запрос на поиск для обновления таймера ожидания на сервере
-                req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
+                req_body = json.dumps({
+                    "login": app.current_user, 
+                    "elo": app.player_elo,
+                    "version": GAME_VERSION
+                })
                 UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, 
                            on_success=lambda r, res: Clock.schedule_once(lambda dt: self.check_match_status(app), 2))
 
@@ -1016,7 +1109,7 @@ class GameScreen(Screen):
 
     def start_polling(self):
         self.stop_polling()
-        self.poll_event = Clock.schedule_interval(self.check_server_move, 2)
+        self.poll_event = Clock.schedule_interval(self.check_server_move, 1.5)
 
     def stop_polling(self):
         if self.poll_event:
@@ -1028,25 +1121,22 @@ class GameScreen(Screen):
         if not app.is_online or not app.online_room_id: return
         
         def on_success(req, result):
-            if not result or not result.get('last_move'): return
-            move_data = json.loads(result['last_move'])
-            m = tuple(move_data)
+            if not result or not result.get('board_data'): return
+            new_state = json.loads(result['board_data'])
             
-            if self.last_move == m: return
-            
-            self.history.append((copy_state(self.state), self.last_move))
-            self.state = apply_move(self.state, m)
-            self.last_move = m
-            self.selected = None
-            self.legal_targets = []
-            app.play_sound()
-            self.update_ui()
-            
-            if app.is_ranked:
-                self.reset_timer()
+            if self.state['turn'] != new_state['turn']:
+                self.history.append((copy_state(self.state), self.last_move))
+                self.state = new_state
+                self.last_move = None
+                self.selected = None
+                self.legal_targets = []
+                app.play_sound()
+                self.update_ui()
+                
+                if app.is_ranked:
+                    self.reset_timer()
 
         def on_error(req, error):
-            # Если комната не найдена (соперник вышел)
             if req.resp_status == 404:
                 self.stop_polling()
                 self.stop_timer()
@@ -1345,7 +1435,11 @@ class GameScreen(Screen):
         
         if app.is_online:
             def on_success(req, res): pass
-            UrlRequest(f"{SERVER_URL}/make_move", req_body=json.dumps({"room_id": app.online_room_id, "login": app.current_user, "move_data": json.dumps(m)}), req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+            UrlRequest(f"{SERVER_URL}/make_move", req_body=json.dumps({
+                "room_id": app.online_room_id, 
+                "login": app.current_user, 
+                "board_data": json.dumps(self.state) 
+            }), req_headers={'Content-Type': 'application/json'}, on_success=on_success)
             
         self.update_ui()
         
@@ -1399,6 +1493,7 @@ class ChessApp(App):
     online_color = 'white'
     online_opponent = None
     online_opponent_elo = 300
+    last_seen_notification = None
 
     def build(self):
         self.init_audio()
