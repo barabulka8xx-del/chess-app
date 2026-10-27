@@ -36,22 +36,25 @@ SERVER_URL = "http://node.waifly.com:27402"
 # ================== КАСТОМНЫЕ КНОПКИ ==================
 class RoundedButton(Button):
     def __init__(self, **kwargs):
+        # Вытаскиваем цвет фона, чтобы применить его к нашему закругленному прямоугольнику
+        bg_col = kwargs.pop('background_color', (0.4, 0.4, 0.4, 1))
+        
         super().__init__(**kwargs)
         self.background_normal = ''
         self.background_down = ''
         
+        # ГЛАВНЫЙ ФИКС: скрываем стандартный прямоугольный фон Kivy
+        self.background_color = (0, 0, 0, 0)
+        
         with self.canvas.before:
-            self.bg_color = Color(rgba=self.background_color)
+            self.bg_color = Color(rgba=bg_col)
             self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(15)])
             
-        self.bind(pos=self.update_rect, size=self.update_rect, background_color=self.update_color)
+        self.bind(pos=self.update_rect, size=self.update_rect)
         
     def update_rect(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
-        
-    def update_color(self, *args):
-        self.bg_color.rgba = self.background_color
 
 class SquareButton(Button):
     def __init__(self, r, c, **kwargs):
@@ -351,9 +354,9 @@ def get_bot_move(s, difficulty):
         val = minimax(apply_move(s, m), 2, -float('inf'), float('inf'), True)
         val += random.randint(-10, 10)
         if val < best_val: best_val = val; best_move = m
-    return best_move# ================== KIVY UI ==================
+    return best_move
+    # ================== KIVY UI ==================
 
-# ЭКРАН ЗАГРУЗКИ (Иконка на фоне)
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -622,8 +625,14 @@ class MainMenuScreen(BackgroundScreen):
             self.elo_label.text = "ЭЛО: Недоступно (Офлайн)"
             self.elo_label.color = (0.5, 0.5, 0.5, 1)
         else:
-            self.elo_label.text = f"Ваш ЭЛО: {app.player_elo}"
-            self.elo_label.color = (1, 0.8, 0.2, 1)
+            # СИНХРОНИЗАЦИЯ ЭЛО С СЕРВЕРОМ
+            def sync_success(req, result):
+                app.player_elo = result.get('elo', app.player_elo)
+                app.save_user_data()
+                self.elo_label.text = f"Ваш ЭЛО: {app.player_elo}"
+                self.elo_label.color = (1, 0.8, 0.2, 1)
+                
+            UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success)
             
         app.play_music()
 
@@ -1018,7 +1027,21 @@ class GameScreen(Screen):
             if app.is_ranked:
                 self.reset_timer()
 
-        UrlRequest(f"{SERVER_URL}/get_move/{app.online_room_id}", on_success=on_success)
+        def on_error(req, error):
+            # Если комната не найдена (соперник вышел)
+            if req.resp_status == 404:
+                self.stop_polling()
+                self.stop_timer()
+                self.game_over_triggered = True
+                
+                def sync_success(r, res):
+                    app.player_elo = res.get('elo', app.player_elo)
+                    app.save_user_data()
+                    self.show_end_popup("ПОБЕДА!", "Соперник покинул игру.\nВам засчитана победа!\n\nВаш ЭЛО: " + str(app.player_elo))
+                
+                UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success)
+
+        UrlRequest(f"{SERVER_URL}/get_move/{app.online_room_id}", on_success=on_success, on_error=on_error)
 
     def start_timer(self):
         self.stop_timer()
@@ -1200,10 +1223,27 @@ class GameScreen(Screen):
 
     def apply_exit_penalty(self, instance):
         self.stop_timer()
+        self.stop_polling()
         app = App.get_running_app()
-        penalty = app.calculate_loss_penalty() + 10
-        app.player_elo = max(0, app.player_elo - penalty)
-        app.save_user_data()
+        
+        if app.is_online and app.online_room_id:
+            winner = app.online_opponent
+            req_body = json.dumps({"room_id": app.online_room_id, "winner": winner, "is_ranked": app.is_ranked})
+            
+            def send_result(req, res):
+                if res and 'players' in res:
+                    if app.current_user == res['players'][0]:
+                        app.player_elo = res['new_elo_p1']
+                    else:
+                        app.player_elo = res['new_elo_p2']
+                    app.save_user_data()
+            
+            UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=send_result)
+        else:
+            penalty = app.calculate_loss_penalty() + 10
+            app.player_elo = max(0, app.player_elo - penalty)
+            app.save_user_data()
+            
         app.save_active_game(False)
         self.exit_popup.dismiss()
         self.exit_to_menu()
@@ -1376,6 +1416,9 @@ class ChessApp(App):
                         json.dump({'penalty': penalty}, f)
                 except: pass
                 self.save_active_game(False)
+                
+        if self.is_online and self.online_room_id:
+            UrlRequest(f"{SERVER_URL}/leave_match", req_body=json.dumps({"login": self.current_user}), req_headers={'Content-Type': 'application/json'})
 
     def check_pending_crash_penalty(self):
         path = os.path.join(self.user_data_dir, 'pending_penalty.json')
