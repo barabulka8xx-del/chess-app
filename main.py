@@ -24,9 +24,13 @@ from kivy.core.audio import SoundLoader
 from kivy.metrics import dp
 from kivy.core.text import LabelBase
 from kivy.animation import Animation
+from kivy.network.urlrequest import UrlRequest
 
 # РЕГИСТРАЦИЯ ШРИФТА
 LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
+
+# АДРЕС ТВОЕГО СЕРВЕРА
+SERVER_URL = "http://node.waifly.com:27402"
 
 # ================== ЛОГИКА ШАХМАТ ==================
 KNIGHT_OFF = [(-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)]
@@ -421,7 +425,6 @@ class LoginScreen(BackgroundScreen):
             self.status_label.text = "Заполните все поля!"
             return
             
-        # ВАЛИДАЦИЯ ЛОГИНА
         if not re.match(r'^[A-Za-z0-9_]{3,20}$', login):
             self.status_label.text = "Только англ. буквы, цифры и _ (3-20 симв.)!"
             return
@@ -497,6 +500,7 @@ class MainMenuScreen(BackgroundScreen):
     def start_game(self, mode):
         app = App.get_running_app()
         app.is_ranked = False
+        app.is_online = False
         app.game_mode = mode
         app.game_screen.new_game()
         self.manager.current = 'game'
@@ -504,17 +508,24 @@ class MainMenuScreen(BackgroundScreen):
     def start_bot_menu(self):
         app = App.get_running_app()
         app.is_ranked = False
+        app.is_online = False
         self.manager.current = 'bot_menu'
 
 class RankedMenuScreen(BackgroundScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20), size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
-        layout.add_widget(Label(text="Ранговый матч", font_size=dp(30), bold=True, size_hint_y=0.3))
+        self.is_searching = False
         
-        btn_online = Button(text="Онлайн (в разработке)", font_size=dp(20), size_hint_y=0.15)
-        btn_online.bind(on_release=self.show_online_dev)
-        layout.add_widget(btn_online)
+        layout = BoxLayout(orientation='vertical', padding=dp(50), spacing=dp(20), size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        layout.add_widget(Label(text="Ранговый матч", font_size=dp(30), bold=True, size_hint_y=0.15))
+        
+        btn_find = Button(text="Найти соперника (Онлайн)", font_size=dp(20), size_hint_y=0.15, background_color=(0.2, 0.6, 0.8, 1))
+        btn_find.bind(on_release=self.find_online_match)
+        layout.add_widget(btn_find)
+        
+        btn_room = Button(text="Игра по коду (Друзья)", font_size=dp(20), size_hint_y=0.15, background_color=(0.8, 0.5, 0.2, 1))
+        btn_room.bind(on_release=self.show_room_menu)
+        layout.add_widget(btn_room)
         
         btn_bot = Button(text="С Ботом", font_size=dp(20), size_hint_y=0.15)
         btn_bot.bind(on_release=self.start_ranked_bot)
@@ -524,14 +535,138 @@ class RankedMenuScreen(BackgroundScreen):
         btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main_menu'))
         layout.add_widget(btn_back)
         
+        # Статус сервера (внизу)
+        self.server_status_label = Label(text="проверка сервера...", font_size=dp(12), color=(1, 1, 0, 1), size_hint_y=0.1)
+        layout.add_widget(self.server_status_label)
+        
         self.main_layout.add_widget(layout)
 
     def on_pre_enter(self, *args):
         App.get_running_app().play_music()
+        self.check_server_status()
 
-    def show_online_dev(self, instance):
-        popup = Popup(title="Онлайн", content=Label(text="Онлайн режим в разработке.\nСкоро подключим!"), size_hint=(0.8, 0.3))
+    def check_server_status(self):
+        def on_success(req, result):
+            self.server_status_label.text = "сервер онлайн"
+            self.server_status_label.color = (0, 1, 0, 1) # Зеленый
+
+        def on_error(req, error):
+            self.server_status_label.text = "сервер офлайн"
+            self.server_status_label.color = (1, 0, 0, 1) # Красный
+
+        UrlRequest(f"{SERVER_URL}/ping", on_success=on_success, on_error=on_error, timeout=5)
+
+    def find_online_match(self, instance):
+        app = App.get_running_app()
+        self.is_searching = True
+        
+        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+        content.add_widget(Label(text="Ищем соперника...\nПодождите."))
+        
+        btn_cancel = Button(text="Отменить поиск", size_hint_y=None, height=dp(50), background_color=(0.8, 0.2, 0.2, 1))
+        btn_cancel.bind(on_release=self.cancel_search)
+        content.add_widget(btn_cancel)
+        
+        self.waiting_popup = Popup(title="Поиск", content=content, size_hint=(0.8, 0.4), auto_dismiss=False)
+        self.waiting_popup.open()
+        
+        def on_success(req, result):
+            if not self.is_searching: return
+            if result.get('status') == 'waiting':
+                Clock.schedule_once(lambda dt: self.check_match_status(app), 2)
+            elif result.get('status') == 'matched':
+                self.is_searching = False
+                self.start_online_game(result['room_id'], result['color'], result['opponent'])
+                
+        def on_error(req, error):
+            self.waiting_popup.dismiss()
+            self.is_searching = False
+            Popup(title="Ошибка", content=Label(text="Сервер недоступен"), size_hint=(0.8, 0.3)).open()
+
+        req_body = json.dumps({"login": app.current_user, "elo": app.player_elo})
+        UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
+
+    def cancel_search(self, instance):
+        self.is_searching = False
+        self.waiting_popup.dismiss()
+        app = App.get_running_app()
+        UrlRequest(f"{SERVER_URL}/cancel_search", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'})
+
+    def check_match_status(self, app):
+        if not self.is_searching: return
+        if not getattr(self.waiting_popup, '_window', None): return
+        
+        def on_success(req, result):
+            if not self.is_searching: return
+            if result.get('status') == 'matched':
+                self.is_searching = False
+                self.start_online_game(result['room_id'], result['color'], result['opponent'])
+            elif result.get('status') == 'waiting':
+                Clock.schedule_once(lambda dt: self.check_match_status(app), 2)
+
+        UrlRequest(f"{SERVER_URL}/check_match/{app.current_user}", on_success=on_success)
+
+    def start_online_game(self, room_id, color, opponent):
+        self.waiting_popup.dismiss()
+        app = App.get_running_app()
+        app.is_online = True
+        app.is_ranked = True
+        app.game_mode = 'bot' 
+        app.online_room_id = room_id
+        app.online_color = color
+        app.online_opponent = opponent
+        
+        app.game_screen.new_game()
+        self.manager.current = 'game'
+        
+        popup = Popup(title="Игра началась", content=Label(text=f"Соперник: {opponent}\nВаш цвет: {'Белые' if color == 'white' else 'Черные'}"), size_hint=(0.8, 0.3))
         popup.open()
+
+    def show_room_menu(self, instance):
+        content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+        btn_create = Button(text="Создать комнату", size_hint_y=None, height=dp(50), background_color=(0.2, 0.7, 0.2, 1))
+        btn_join = Button(text="Войти по коду", size_hint_y=None, height=dp(50), background_color=(0.2, 0.5, 0.8, 1))
+        code_input = TextInput(hint_text="Код комнаты", multiline=False, size_hint_y=None, height=dp(50))
+        
+        content.add_widget(btn_create)
+        content.add_widget(code_input)
+        content.add_widget(btn_join)
+        
+        self.room_popup = Popup(title="Игра по коду", content=content, size_hint=(0.8, 0.5))
+        
+        def create_req(req, result):
+            self.room_popup.dismiss()
+            Popup(title="Комната создана", content=Label(text=f"Код: {result['room_id']}\nЖдем соперника..."), size_hint=(0.8, 0.4)).open()
+            self.poll_join(result['room_id'])
+
+        def join_req(req, result):
+            self.room_popup.dismiss()
+            app = App.get_running_app()
+            app.is_online = True
+            app.is_ranked = False
+            app.online_room_id = code_input.text.upper()
+            app.online_color = 'black'
+            app.game_screen.new_game()
+            self.manager.current = 'game'
+
+        btn_create.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/create_room", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'}, on_success=create_req))
+        btn_join.bind(on_release=lambda x: UrlRequest(f"{SERVER_URL}/join_room", req_body=json.dumps({"login": app.current_user, "room_code": code_input.text.upper()}), req_headers={'Content-Type': 'application/json'}, on_success=join_req))
+        
+        self.room_popup.open()
+
+    def poll_join(self, room_id):
+        app = App.get_running_app()
+        def check(req, result):
+            if result.get('last_move') is not None:
+                app.is_online = True
+                app.is_ranked = False
+                app.online_room_id = room_id
+                app.online_color = 'white'
+                app.game_screen.new_game()
+                self.manager.current = 'game'
+            else:
+                Clock.schedule_once(lambda dt: self.poll_join(room_id), 2)
+        UrlRequest(f"{SERVER_URL}/get_move/{room_id}", on_success=check)
 
     def start_ranked_bot(self, instance):
         app = App.get_running_app()
@@ -541,6 +676,7 @@ class RankedMenuScreen(BackgroundScreen):
         else: diff = 3
             
         app.is_ranked = True
+        app.is_online = False
         app.game_mode = 'bot'
         app.bot_diff = diff
         app.game_screen.new_game()
@@ -568,6 +704,7 @@ class BotMenuScreen(BackgroundScreen):
     def start_bot(self, diff):
         app = App.get_running_app()
         app.is_ranked = False
+        app.is_online = False
         app.game_mode = 'bot'
         app.bot_diff = diff
         app.game_screen.new_game()
@@ -586,9 +723,9 @@ class GameScreen(Screen):
         self.game_over_triggered = False
         self.exit_popup = None
         
-        # ТАЙМЕР (45 секунд на каждый ход)
         self.time_left = 45
         self.timer_event = None
+        self.poll_event = None
         
         main_layout = BoxLayout(orientation='vertical')
         
@@ -621,6 +758,10 @@ class GameScreen(Screen):
     def on_pre_enter(self, *args):
         App.get_running_app().stop_music()
 
+    def on_leave(self, *args):
+        self.stop_timer()
+        self.stop_polling()
+
     def new_game(self):
         self.state = start_state()
         self.history = []
@@ -631,7 +772,7 @@ class GameScreen(Screen):
         self.game_over_triggered = False
         
         app = App.get_running_app()
-        if app.is_ranked:
+        if app.is_ranked or app.is_online:
             self.btn_undo.text = "Без отмены"
             self.btn_undo.disabled = True
             self.btn_undo.background_color = (0.4, 0.4, 0.4, 1)
@@ -645,17 +786,51 @@ class GameScreen(Screen):
             self.stop_timer()
             self.timer_label.text = ""
             
+        if app.is_online:
+            self.start_polling()
+            
         self.update_ui()
+
+    def start_polling(self):
+        self.stop_polling()
+        self.poll_event = Clock.schedule_interval(self.check_server_move, 2)
+
+    def stop_polling(self):
+        if self.poll_event:
+            self.poll_event.cancel()
+            self.poll_event = None
+
+    def check_server_move(self, dt):
+        app = App.get_running_app()
+        if not app.is_online or not app.online_room_id: return
+        
+        def on_success(req, result):
+            if not result or not result.get('last_move'): return
+            move_data = json.loads(result['last_move'])
+            m = tuple(move_data)
+            
+            if self.last_move == m: return
+            
+            self.history.append((copy_state(self.state), self.last_move))
+            self.state = apply_move(self.state, m)
+            self.last_move = m
+            self.selected = None
+            self.legal_targets = []
+            app.play_sound()
+            self.update_ui()
+            
+            if app.is_ranked:
+                self.reset_timer()
+
+        UrlRequest(f"{SERVER_URL}/get_move/{app.online_room_id}", on_success=on_success)
 
     def start_timer(self):
         self.stop_timer()
         app = App.get_running_app()
-        if not app.is_ranked:
-            return
+        if not (app.is_ranked or app.is_online): return
             
-        # Таймер тикает только когда ход игрока (белые)
-        if self.state['turn'] != 'w':
-            return
+        my_color = 'w' if not hasattr(app, 'online_color') else ('w' if app.online_color == 'white' else 'b')
+        if self.state['turn'] != my_color: return
 
         self.timer_label.color = (1, 0.5, 0.5, 1)
         self.timer_label.text = f"⏳ {self.time_left}с"
@@ -667,13 +842,12 @@ class GameScreen(Screen):
             self.timer_event = None
 
     def tick_timer(self, dt):
-        if game_status(self.state) is not None or self.state['turn'] != 'w':
+        if game_status(self.state) is not None:
             self.stop_timer()
             return
             
         self.time_left -= 1
         
-        # Если осталось 5 секунд или меньше - делаем красным
         if self.time_left <= 5:
             self.timer_label.color = (1, 0, 0, 1)
             self.timer_label.text = f"⚠️ {self.time_left}с"
@@ -686,10 +860,8 @@ class GameScreen(Screen):
             self.time_out_loss()
 
     def reset_timer(self):
-        # 40 секунд на ход + 5 секунд запаса = 45 секунд
         self.time_left = 45
-        if App.get_running_app().is_ranked:
-            self.start_timer()
+        self.start_timer()
 
     def time_out_loss(self):
         self.game_over_triggered = True
@@ -723,6 +895,7 @@ class GameScreen(Screen):
         if st == 'checkmate' and not self.game_over_triggered:
             self.game_over_triggered = True
             self.stop_timer()
+            self.stop_polling()
             app = App.get_running_app()
             app.save_active_game(False)
             
@@ -731,7 +904,25 @@ class GameScreen(Screen):
             else:
                 title_text = "ПОБЕДА ЧЁРНЫХ!" if app.game_mode == '2p' else "ПОРАЖЕНИЕ"
                 
-            if app.is_ranked:
+            if app.is_online:
+                winner = app.current_user if self.state['turn'] == 'b' else app.online_opponent
+                req_body = json.dumps({"room_id": app.online_room_id, "winner": winner, "is_ranked": app.is_ranked})
+                
+                def send_result(req, res):
+                    if res and 'players' in res:
+                        if app.current_user == res['players'][0]:
+                            app.player_elo = res['new_elo_p1']
+                        else:
+                            app.player_elo = res['new_elo_p2']
+                        app.save_user_data()
+                        
+                UrlRequest(f"{SERVER_URL}/finish_game", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=send_result)
+                
+                if app.is_ranked:
+                    msg = "Игра окончена!\n\nЭЛО обновлено (см. в меню)."
+                else:
+                    msg = "Игра окончена!\n\nВ дружеском матче ЭЛО не начисляется."
+            elif app.is_ranked:
                 if self.state['turn'] == 'b':
                     base_points = {1: 12, 2: 25, 3: 37}.get(app.bot_diff, 12)
                     app.player_elo += base_points
@@ -780,10 +971,11 @@ class GameScreen(Screen):
 
     def go_to_menu(self, instance):
         app = App.get_running_app()
-        if app.is_ranked and game_status(self.state) is None:
+        if (app.is_ranked or app.is_online) and game_status(self.state) is None:
             self.show_exit_warning()
         else:
             self.stop_timer()
+            self.stop_polling()
             self.exit_to_menu()
 
     def show_exit_warning(self):
@@ -823,11 +1015,12 @@ class GameScreen(Screen):
     def exit_to_menu(self):
         App.get_running_app().bot_gen += 1
         self.bot_thinking = False
+        self.stop_polling()
         self.manager.current = 'main_menu'
 
     def undo_move(self, instance):
         app = App.get_running_app()
-        if app.is_ranked: return
+        if app.is_ranked or app.is_online: return
         if game_status(self.state) is not None: return
             
         if self.history:
@@ -841,7 +1034,13 @@ class GameScreen(Screen):
 
     def handle_square_click(self, r, c):
         if game_status(self.state) is not None: return
-        if App.get_running_app().game_mode == 'bot' and (self.bot_thinking or self.state['turn'] == 'b'): return
+        app = App.get_running_app()
+        
+        if app.is_online:
+            my_color = 'w' if app.online_color == 'white' else 'b'
+            if self.state['turn'] != my_color: return
+        
+        if app.game_mode == 'bot' and not app.is_online and (self.bot_thinking or self.state['turn'] == 'b'): return
 
         if self.selected:
             for m in self.legal_targets:
@@ -887,16 +1086,19 @@ class GameScreen(Screen):
         self.legal_targets = []
         
         app = App.get_running_app()
-        self.stop_timer() # Останавливаем таймер, пока ходит бот
-            
+        self.stop_timer()
         app.play_sound()
+        
+        if app.is_online:
+            def on_success(req, res): pass
+            UrlRequest(f"{SERVER_URL}/make_move", req_body=json.dumps({"room_id": app.online_room_id, "login": app.current_user, "move_data": json.dumps(m)}), req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+            
         self.update_ui()
         
-        if app.game_mode == 'bot' and game_status(self.state) is None and self.state['turn'] == 'b':
+        if not app.is_online and app.game_mode == 'bot' and game_status(self.state) is None and self.state['turn'] == 'b':
             self.start_bot()
-        else:
-            if app.is_ranked:
-                self.reset_timer() # Если играем с другом, запускаем для следующего хода
+        elif app.is_online or app.is_ranked:
+            self.reset_timer()
 
     def start_bot(self):
         self.bot_thinking = True
@@ -923,7 +1125,7 @@ class GameScreen(Screen):
             app.play_sound()
             
         if app.is_ranked:
-            self.reset_timer() # Запускаем таймер для хода игрока
+            self.reset_timer()
             
         self.update_ui()
 
@@ -937,6 +1139,10 @@ class ChessApp(App):
     current_user = None
     player_elo = 300
     is_ranked = False
+    is_online = False
+    online_room_id = None
+    online_color = 'white'
+    online_opponent = None
 
     def build(self):
         self.init_audio()
@@ -993,7 +1199,7 @@ class ChessApp(App):
         except: pass
 
     def calculate_loss_penalty(self):
-        base = {1: 12, 2: 25, 3: 37}.get(self.bot_diff, 12) # УМЕНЬШИЛИ ШТРАФЫ ПОД СТАТЫ
+        base = {1: 12, 2: 25, 3: 37}.get(self.bot_diff, 12)
         elo = self.player_elo
         if elo <= 400:
             return max(5, base - 5)
