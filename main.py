@@ -351,40 +351,39 @@ def get_bot_move(s, difficulty):
         val = minimax(apply_move(s, m), 2, -float('inf'), float('inf'), True)
         val += random.randint(-10, 10)
         if val < best_val: best_val = val; best_move = m
-    return best_move
+    return best_move# ================== KIVY UI ==================
 
-# ================== KIVY UI ==================
-
-# НОВЫЙ ЭКРАН ЗАГРУЗКИ
+# ЭКРАН ЗАГРУЗКИ (Иконка на фоне)
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
-        with self.canvas.before:
-            Color(0, 0, 0, 1)
-            self.rect = Rectangle(pos=self.pos, size=self.size)
-        self.bind(pos=self.update_rect, size=self.update_rect)
+        main_layout = FloatLayout()
         
-        layout = BoxLayout(orientation='vertical', padding=dp(50))
+        self.bg_image = Image(
+            source='icon.png', 
+            allow_stretch=True, 
+            keep_ratio=False,
+            size_hint=(1, 1), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+        )
+        main_layout.add_widget(self.bg_image)
         
-        self.logo = Image(source='icon.png', size_hint=(1, 0.6), opacity=1)
-        layout.add_widget(self.logo)
+        ui_layout = BoxLayout(orientation='vertical', size_hint=(1, 1), padding=dp(20))
+        ui_layout.add_widget(Label(size_hint_y=0.85)) 
         
-        self.status = Label(text="Загрузка...", font_size=dp(24), color=(1,1,1,1), size_hint=(1, 0.4))
-        layout.add_widget(self.status)
+        self.status = Label(text="Загрузка...", font_size=dp(24), color=(1,1,1,1), size_hint_y=0.15)
+        ui_layout.add_widget(self.status)
         
-        self.add_widget(layout)
+        main_layout.add_widget(ui_layout)
+        self.add_widget(main_layout)
         
-        self.anim = Animation(opacity=0.3, duration=1.0) + Animation(opacity=1.0, duration=1.0)
+        self.anim = Animation(opacity=0.6, duration=1.0) + Animation(opacity=1.0, duration=1.0)
         self.anim.repeat = True
-        self.anim.start(self.logo)
-
-    def update_rect(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
+        self.anim.start(self.bg_image)
 
     def go_next(self, dt):
-        self.anim.stop(self.logo)
+        self.anim.stop(self.bg_image)
         app = App.get_running_app()
         if app.load_session():
             self.manager.current = 'main_menu'
@@ -1494,7 +1493,6 @@ class ChessApp(App):
         if os.path.exists(path):
             self.sound_move = SoundLoader.load(path)
 
-        # ЗАГРУЗКА МУЗЫКИ (Убедись, что файл называется music.ogg)
         self.bg_music = SoundLoader.load('music.ogg')
         if self.bg_music:
             self.bg_music.loop = True
