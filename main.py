@@ -614,16 +614,52 @@ class MainMenuScreen(BackgroundScreen):
         # НОВАЯ КНОПКА [ ▶ ] (Изначально скрыта)
         self.dl_btn = RoundedButton(
             text="▶", font_size=dp(22), bold=True,
-            font_name='ChessFont', # Исправление для кнопки
+            font_name='ChessFont', 
             size_hint=(None, None), size=(dp(50), dp(50)),
-            pos_hint={'right': 0.85, 'y': 0.05},
+            pos_hint={'right': 0.78, 'y': 0.05}, 
             background_color=(0.8, 0.2, 0.8, 1)
         )
         self.dl_btn.rect.radius = [dp(25)] 
-        self.dl_btn.bind(on_release=lambda x: webbrowser.open(SITE_URL))
+        self.dl_btn.bind(on_release=self.show_update_prompt) 
         self.dl_btn.opacity = 0
         self.dl_btn.disabled = True
         self.main_layout.add_widget(self.dl_btn)
+
+    def show_update_prompt(self, instance):
+        content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(15))
+        
+        msg_lbl = Label(
+            text="Вышла новая версия!\nПожалуйста, обновите игру, чтобы получить доступ ко всем новым функциям и исправлениям.", 
+            halign="center", 
+            font_size=dp(16)
+        )
+        msg_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+        content.add_widget(msg_lbl)
+        
+        btn_update = RoundedButton(
+            text="Обновить 👇", 
+            size_hint_y=None, 
+            height=dp(55), 
+            font_size=dp(18), 
+            bold=True,
+            background_color=(0.2, 0.6, 0.2, 1)
+        )
+        
+        popup = Popup(
+            title="Доступно обновление", 
+            content=content, 
+            size_hint=(0.85, 0.4), 
+            auto_dismiss=True
+        )
+        
+        def go_to_site(instance):
+            popup.dismiss()
+            webbrowser.open(SITE_URL)
+            
+        btn_update.bind(on_release=go_to_site)
+        content.add_widget(btn_update)
+        
+        popup.open()
 
     def show_changelog(self, instance):
         content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
@@ -654,7 +690,6 @@ class MainMenuScreen(BackgroundScreen):
             "• Исправлен баг, когда соперник не получал победу, если игрок выходил из комнаты.\n"
             "• Уведомления больше не спамят при каждом заходе в меню (сохраняются в кэш).\n"
             "• В уведомления возвращена кнопка скачивания новой версии.\n"
-            "• Добавлена умная кнопка (▶) - появляется только если версия устарела.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -699,10 +734,20 @@ class MainMenuScreen(BackgroundScreen):
             
             # ПРОВЕРКА ВЕРСИИ ДЛЯ КНОПКИ [ ▶ ]
             def version_success(req, result):
-                if result.get('version') != GAME_VERSION:
-                    self.dl_btn.opacity = 1
-                    self.dl_btn.disabled = False
-                else:
+                try:
+                    if isinstance(result, str):
+                        res_dict = json.loads(result)
+                    else:
+                        res_dict = result
+                    server_ver = str(res_dict.get('version', '1.0'))
+                    
+                    if server_ver != str(GAME_VERSION):
+                        self.dl_btn.opacity = 1
+                        self.dl_btn.disabled = False
+                    else:
+                        self.dl_btn.opacity = 0
+                        self.dl_btn.disabled = True
+                except Exception as e:
                     self.dl_btn.opacity = 0
                     self.dl_btn.disabled = True
                     
