@@ -39,7 +39,7 @@ SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
 
 # ТЕКУЩАЯ ВЕРСИЯ ИГРЫ
-GAME_VERSION = "1.0"
+GAME_VERSION = "1.1"
 
 # ================== КАСТОМНЫЕ ЭЛЕМЕНТЫ UI ==================
 
@@ -391,18 +391,41 @@ def get_bot_move(s, difficulty):
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        
+        # Темный фон в стиле сайта
+        with self.canvas.before:
+            Color(0.12, 0.12, 0.12, 1)
+            self.rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self.update_rect, size=self.update_rect)
+        
         main_layout = FloatLayout()
-        self.bg_image = Image(source='icon.png', allow_stretch=True, keep_ratio=False, size_hint=(1, 1), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        
+        # Иконка по центру, больше не растягивается на весь экран
+        self.bg_image = Image(
+            source='icon.png', 
+            allow_stretch=True, 
+            keep_ratio=True, 
+            size_hint=(None, None), 
+            size=(dp(150), dp(150)), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.6}
+        )
         main_layout.add_widget(self.bg_image)
+        
         ui_layout = BoxLayout(orientation='vertical', size_hint=(1, 1), padding=dp(20))
         ui_layout.add_widget(Label(size_hint_y=0.85)) 
         self.status = Label(text="Загрузка...", font_size=dp(24), color=(1,1,1,1), size_hint_y=0.15)
         ui_layout.add_widget(self.status)
+        
         main_layout.add_widget(ui_layout)
         self.add_widget(main_layout)
-        self.anim = Animation(opacity=0.6, duration=1.0) + Animation(opacity=1.0, duration=1.0)
+        
+        self.anim = Animation(opacity=0.5, duration=1.0) + Animation(opacity=1.0, duration=1.0)
         self.anim.repeat = True
         self.anim.start(self.bg_image)
+
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
 
     def go_next(self, dt):
         self.anim.stop(self.bg_image)
@@ -416,9 +439,28 @@ class BackgroundScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.main_layout = FloatLayout()
-        self.bg = Image(source='menu_bg.png', allow_stretch=True, keep_ratio=False, size_hint=(1, 1), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        
+        # Темная подложка
+        with self.canvas.before:
+            Color(0.12, 0.12, 0.12, 1)
+            self.rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self.update_rect, size=self.update_rect)
+        
+        # Твоя картинка, но теперь она полупрозрачная (opacity=0.15)
+        self.bg = Image(
+            source='menu_bg.png', 
+            allow_stretch=True, 
+            keep_ratio=False, 
+            size_hint=(1, 1), 
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            opacity=0.15 
+        )
         self.main_layout.add_widget(self.bg)
         self.add_widget(self.main_layout)
+
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
 
 class ChessBoard(GridLayout):
     def __init__(self, **kwargs):
@@ -611,7 +653,7 @@ class MainMenuScreen(BackgroundScreen):
         self.info_btn.bind(on_release=self.show_changelog)
         self.main_layout.add_widget(self.info_btn)
 
-        # НОВАЯ КНОПКА [ ▶ ] (Изначально скрыта)
+        # Кнопка [ ▶ ]
         self.dl_btn = RoundedButton(
             text="▶", font_size=dp(22), bold=True,
             font_name='ChessFont', 
@@ -637,7 +679,7 @@ class MainMenuScreen(BackgroundScreen):
         content.add_widget(msg_lbl)
         
         btn_update = RoundedButton(
-            text="Обновить 👇", 
+            text="Скачать обновление", 
             size_hint_y=None, 
             height=dp(55), 
             font_size=dp(18), 
@@ -688,8 +730,14 @@ class MainMenuScreen(BackgroundScreen):
             "[b]Обновление 3[/b]\n"
             "• Убран штраф за выход из дружеской игры (онлайн по коду).\n"
             "• Исправлен баг, когда соперник не получал победу, если игрок выходил из комнаты.\n"
-            "• Уведомления больше не спамят при каждом заходе в меню (сохраняются в кэш).\n"
+            "• Уведомления больше не спамят при каждом заходе в меню.\n"
             "• В уведомления возвращена кнопка скачивания новой версии.\n"
+            "• Добавлена умная кнопка (▶) - появляется только если версия устарела.\n\n"
+            "[b]Обновление 4[/b]\n"
+            "• Полностью переработан дизайн игры в стиле сайта.\n"
+            "• Экран загрузки стал темным, с аккуратной иконкой по центру.\n"
+            "• Фон меню затемнен, чтобы кнопки читались лучше.\n"
+            "• Исправлено появление квадратика вместо стрелочки на кнопке обновления.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
