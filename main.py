@@ -39,7 +39,7 @@ SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
 
 # ТЕКУЩАЯ ВЕРСИЯ ИГРЫ
-GAME_VERSION = "1.1"
+GAME_VERSION = "1.2"
 
 # ================== КАСТОМНЫЕ ЭЛЕМЕНТЫ UI ==================
 
@@ -400,7 +400,7 @@ class LoadingScreen(Screen):
         
         main_layout = FloatLayout()
         
-        # Иконка по центру, больше не растягивается на весь экран
+        # Иконка по центру
         self.bg_image = Image(
             source='icon.png', 
             allow_stretch=True, 
@@ -440,13 +440,11 @@ class BackgroundScreen(Screen):
         super().__init__(**kwargs)
         self.main_layout = FloatLayout()
         
-        # Темная подложка
         with self.canvas.before:
             Color(0.12, 0.12, 0.12, 1)
             self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
         
-        # Твоя картинка, но теперь она полупрозрачная (opacity=0.15)
         self.bg = Image(
             source='menu_bg.png', 
             allow_stretch=True, 
@@ -642,7 +640,6 @@ class MainMenuScreen(BackgroundScreen):
         
         self.main_layout.add_widget(ui_layout)
 
-        # Кнопка (i)
         self.info_btn = RoundedButton(
             text="(i)", font_size=dp(20), bold=True,
             size_hint=(None, None), size=(dp(50), dp(50)),
@@ -653,7 +650,6 @@ class MainMenuScreen(BackgroundScreen):
         self.info_btn.bind(on_release=self.show_changelog)
         self.main_layout.add_widget(self.info_btn)
 
-        # Кнопка [ ▶ ]
         self.dl_btn = RoundedButton(
             text="▶", font_size=dp(22), bold=True,
             font_name='ChessFont', 
@@ -669,30 +665,13 @@ class MainMenuScreen(BackgroundScreen):
 
     def show_update_prompt(self, instance):
         content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(15))
-        
-        msg_lbl = Label(
-            text="Вышла новая версия!\nПожалуйста, обновите игру, чтобы получить доступ ко всем новым функциям и исправлениям.", 
-            halign="center", 
-            font_size=dp(16)
-        )
+        msg_lbl = Label(text="Вышла новая версия!\nПожалуйста, обновите игру, чтобы получить доступ ко всем новым функциям и исправлениям.", halign="center", font_size=dp(16))
         msg_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
         content.add_widget(msg_lbl)
         
-        btn_update = RoundedButton(
-            text="Скачать обновление", 
-            size_hint_y=None, 
-            height=dp(55), 
-            font_size=dp(18), 
-            bold=True,
-            background_color=(0.2, 0.6, 0.2, 1)
-        )
+        btn_update = RoundedButton(text="Скачать обновление", size_hint_y=None, height=dp(55), font_size=dp(18), bold=True, background_color=(0.2, 0.6, 0.2, 1))
         
-        popup = Popup(
-            title="Доступно обновление", 
-            content=content, 
-            size_hint=(0.85, 0.4), 
-            auto_dismiss=True
-        )
+        popup = Popup(title="Доступно обновление", content=content, size_hint=(0.85, 0.4), auto_dismiss=True)
         
         def go_to_site(instance):
             popup.dismiss()
@@ -700,7 +679,6 @@ class MainMenuScreen(BackgroundScreen):
             
         btn_update.bind(on_release=go_to_site)
         content.add_widget(btn_update)
-        
         popup.open()
 
     def show_changelog(self, instance):
@@ -737,7 +715,11 @@ class MainMenuScreen(BackgroundScreen):
             "• Полностью переработан дизайн игры в стиле сайта.\n"
             "• Экран загрузки стал темным, с аккуратной иконкой по центру.\n"
             "• Фон меню затемнен, чтобы кнопки читались лучше.\n"
-            "• Исправлено появление квадратика вместо стрелочки на кнопке обновления.\n"
+            "• Исправлено появление квадратика вместо стрелочки на кнопке обновления.\n\n"
+            "[b]Обновление 5[/b]\n"
+            "• Убран пароль администратора из открытого кода (теперь вводится вручную).\n"
+            "• На сайте появилась защита от спама (Lakera Guard).\n"
+            "• В чате поддержки на сайте теперь отображаются имена игроков.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -780,7 +762,6 @@ class MainMenuScreen(BackgroundScreen):
                 UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success, on_error=sync_fail, on_failure=sync_fail)
             self.check_developer_notification()
             
-            # ПРОВЕРКА ВЕРСИИ ДЛЯ КНОПКИ [ ▶ ]
             def version_success(req, result):
                 try:
                     if isinstance(result, str):
@@ -809,15 +790,23 @@ class MainMenuScreen(BackgroundScreen):
 
     def show_admin_panel(self, instance):
         content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
+        
         input_text = TextInput(hint_text="Текст уведомления для игроков...", multiline=False, size_hint_y=None, height=dp(50))
         content.add_widget(input_text)
+        
+        # Поле для ручного ввода пароля
+        pass_input = TextInput(hint_text="Пароль администратора", password=True, multiline=False, size_hint_y=None, height=dp(50))
+        content.add_widget(pass_input)
+        
         btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
-        popup = Popup(title="Рассылка", content=content, size_hint=(0.8, 0.4))
+        popup = Popup(title="Рассылка", content=content, size_hint=(0.8, 0.5))
         
         def send_notification(req_inst):
             msg = input_text.text.strip()
-            if not msg: return
-            req_body = json.dumps({"login": "DEV$DEV", "password": "AKS.2GmOZx#Z", "message": msg})
+            pwd = pass_input.text.strip()
+            if not msg or not pwd: return
+            
+            req_body = json.dumps({"login": "DEV$DEV", "password": pwd, "message": msg})
             def on_success(req, res):
                 popup.dismiss()
                 path = os.path.join(App.get_running_app().user_data_dir, 'last_notif.txt')
@@ -825,14 +814,23 @@ class MainMenuScreen(BackgroundScreen):
                     try: os.remove(path)
                     except: pass
                 Popup(title="Успех", content=Label(text="Уведомление разослано!"), size_hint=(0.8, 0.3)).open()
-            UrlRequest(f"{SERVER_URL}/admin/send_update", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+            def on_error(req, err):
+                Popup(title="Ошибка", content=Label(text="Неверный пароль администратора!"), size_hint=(0.8, 0.3)).open()
+                
+            UrlRequest(f"{SERVER_URL}/admin/send_update", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
 
         def clear_notification(req_inst):
-            req_body = json.dumps({"login": "DEV$DEV", "password": "AKS.2GmOZx#Z", "message": ""})
+            pwd = pass_input.text.strip()
+            if not pwd: return
+            
+            req_body = json.dumps({"login": "DEV$DEV", "password": pwd, "message": ""})
             def on_success(req, res):
                 popup.dismiss()
                 Popup(title="Успех", content=Label(text="Уведомления отключены."), size_hint=(0.8, 0.3)).open()
-            UrlRequest(f"{SERVER_URL}/admin/clear_notification", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success)
+            def on_error(req, err):
+                Popup(title="Ошибка", content=Label(text="Неверный пароль администратора!"), size_hint=(0.8, 0.3)).open()
+                
+            UrlRequest(f"{SERVER_URL}/admin/clear_notification", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error)
         
         btn_send = RoundedButton(text="Отправить", background_color=(0.2, 0.6, 0.2, 1))
         btn_send.bind(on_release=send_notification)
