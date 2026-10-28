@@ -39,7 +39,7 @@ SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
 
 # ТЕКУЩАЯ ВЕРСИЯ ИГРЫ
-GAME_VERSION = "1.2"
+GAME_VERSION = "1.3"
 
 # ================== КАСТОМНЫЕ ЭЛЕМЕНТЫ UI ==================
 
@@ -400,7 +400,6 @@ class LoadingScreen(Screen):
         
         main_layout = FloatLayout()
         
-        # Иконка по центру
         self.bg_image = Image(
             source='icon.png', 
             allow_stretch=True, 
@@ -588,7 +587,12 @@ class LoginScreen(BackgroundScreen):
             def on_error(req, error):
                 self.submit_btn.disabled = False
                 self.status_label.color = (1, 0.3, 0.3, 1)
-                self.status_label.text = "Неверный пароль" if req.resp_status == 401 else "Ошибка сервера"
+                if req.resp_status == 403:
+                    self.status_label.text = "ВЫ ЗАБАНЕНЫ ЗА ЧИТЕРСТВО!"
+                elif req.resp_status == 401:
+                    self.status_label.text = "Неверный пароль"
+                else:
+                    self.status_label.text = "Ошибка сервера"
             def on_network_fail(req, error):
                 self.submit_btn.disabled = False
                 self.status_label.color = (1, 0.3, 0.3, 1)
@@ -719,7 +723,11 @@ class MainMenuScreen(BackgroundScreen):
             "[b]Обновление 5[/b]\n"
             "• Убран пароль администратора из открытого кода (теперь вводится вручную).\n"
             "• На сайте появилась защита от спама (Lakera Guard).\n"
-            "• В чате поддержки на сайте теперь отображаются имена игроков.\n"
+            "• В чате поддержки на сайте теперь отображаются имена игроков.\n\n"
+            "[b]Обновление 6[/b]\n"
+            "• Добавлена история последних матчей (сохраняется ЭЛО и результаты).\n"
+            "• Внедрена автоматическая защита от читов (слишком быстрые ходы).\n"
+            "• Добавлена система предупреждений от администрации.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -755,6 +763,26 @@ class MainMenuScreen(BackgroundScreen):
                 app.save_user_data()
                 self.elo_label.text = f"Ваш ЭЛО: {app.player_elo}"
                 self.elo_label.color = (1, 0.8, 0.2, 1)
+                
+                # ПРОВЕРКА ПРЕДУПРЕЖДЕНИЯ ОТ АДМИНИСТРАЦИИ
+                warning = result.get('warning')
+                if warning:
+                    warn_popup = Popup(
+                        title="Внимание!",
+                        content=Label(text=warning, halign="center", font_size=dp(16)),
+                        size_hint=(0.85, 0.4),
+                        auto_dismiss=False
+                    )
+                    btn_ok = RoundedButton(text="ОК", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
+                    
+                    def ack_warn(inst):
+                        warn_popup.dismiss()
+                        UrlRequest(f"{SERVER_URL}/acknowledge_warning/{app.current_user}")
+                        
+                    btn_ok.bind(on_release=ack_warn)
+                    warn_popup.content.add_widget(btn_ok)
+                    warn_popup.open()
+                    
             def sync_fail(req, error):
                 self.elo_label.text = f"ЭЛО: {app.player_elo} (Нет сети)"
                 self.elo_label.color = (0.8, 0.5, 0.2, 1)
@@ -794,7 +822,6 @@ class MainMenuScreen(BackgroundScreen):
         input_text = TextInput(hint_text="Текст уведомления для игроков...", multiline=False, size_hint_y=None, height=dp(50))
         content.add_widget(input_text)
         
-        # Поле для ручного ввода пароля
         pass_input = TextInput(hint_text="Пароль администратора", password=True, multiline=False, size_hint_y=None, height=dp(50))
         content.add_widget(pass_input)
         
