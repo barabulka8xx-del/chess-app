@@ -400,6 +400,7 @@ class LoadingScreen(Screen):
         
         main_layout = FloatLayout()
         
+        # Иконка по центру
         self.bg_image = Image(
             source='icon.png', 
             allow_stretch=True, 
@@ -721,13 +722,12 @@ class MainMenuScreen(BackgroundScreen):
             "• Фон меню затемнен, чтобы кнопки читались лучше.\n"
             "• Исправлено появление квадратика вместо стрелочки на кнопке обновления.\n\n"
             "[b]Обновление 5[/b]\n"
-            "• Убран пароль администратора из открытого кода (теперь вводится вручную).\n"
-            "• На сайте появилась защита от спама (Lakera Guard).\n"
+            "• На сайте появилась защита от спама и оскорблений.\n"
             "• В чате поддержки на сайте теперь отображаются имена игроков.\n\n"
             "[b]Обновление 6[/b]\n"
             "• Добавлена история последних матчей (сохраняется ЭЛО и результаты).\n"
-            "• Внедрена автоматическая защита от читов (слишком быстрые ходы).\n"
-            "• Добавлена система предупреждений от администрации.\n"
+            "• Улучшена внутренняя безопасность и стабильность игры.\n"
+            "• Добавлена система предупреждений для нарушителей.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -767,20 +767,37 @@ class MainMenuScreen(BackgroundScreen):
                 # ПРОВЕРКА ПРЕДУПРЕЖДЕНИЯ ОТ АДМИНИСТРАЦИИ
                 warning = result.get('warning')
                 if warning:
+                    warn_layout = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(15))
+                    
+                    warn_lbl = Label(
+                        text=warning, 
+                        halign="center", 
+                        valign="middle", 
+                        font_size=dp(16)
+                    )
+                    warn_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+                    warn_layout.add_widget(warn_lbl)
+                    
                     warn_popup = Popup(
-                        title="Внимание!",
-                        content=Label(text=warning, halign="center", font_size=dp(16)),
-                        size_hint=(0.85, 0.4),
+                        title="Внимание!", 
+                        content=warn_layout, 
+                        size_hint=(0.85, 0.4), 
                         auto_dismiss=False
                     )
-                    btn_ok = RoundedButton(text="ОК", size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
+                    
+                    btn_ok = RoundedButton(
+                        text="Понятно", 
+                        size_hint_y=None, 
+                        height=dp(50), 
+                        background_color=(0.2, 0.6, 0.2, 1)
+                    )
                     
                     def ack_warn(inst):
                         warn_popup.dismiss()
                         UrlRequest(f"{SERVER_URL}/acknowledge_warning/{app.current_user}")
                         
                     btn_ok.bind(on_release=ack_warn)
-                    warn_popup.content.add_widget(btn_ok)
+                    warn_layout.add_widget(btn_ok)
                     warn_popup.open()
                     
             def sync_fail(req, error):
