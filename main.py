@@ -614,6 +614,7 @@ class MainMenuScreen(BackgroundScreen):
         # НОВАЯ КНОПКА [ ▶ ] (Изначально скрыта)
         self.dl_btn = RoundedButton(
             text="▶", font_size=dp(22), bold=True,
+            font_name='ChessFont', # Исправление для кнопки
             size_hint=(None, None), size=(dp(50), dp(50)),
             pos_hint={'right': 0.85, 'y': 0.05},
             background_color=(0.8, 0.2, 0.8, 1)
