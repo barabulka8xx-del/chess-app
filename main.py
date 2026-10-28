@@ -600,6 +600,7 @@ class MainMenuScreen(BackgroundScreen):
         
         self.main_layout.add_widget(ui_layout)
 
+        # Кнопка (i)
         self.info_btn = RoundedButton(
             text="(i)", font_size=dp(20), bold=True,
             size_hint=(None, None), size=(dp(50), dp(50)),
@@ -609,6 +610,19 @@ class MainMenuScreen(BackgroundScreen):
         self.info_btn.rect.radius = [dp(25)] 
         self.info_btn.bind(on_release=self.show_changelog)
         self.main_layout.add_widget(self.info_btn)
+
+        # НОВАЯ КНОПКА [ ▶ ] (Изначально скрыта)
+        self.dl_btn = RoundedButton(
+            text="▶", font_size=dp(22), bold=True,
+            size_hint=(None, None), size=(dp(50), dp(50)),
+            pos_hint={'right': 0.85, 'y': 0.05},
+            background_color=(0.8, 0.2, 0.8, 1)
+        )
+        self.dl_btn.rect.radius = [dp(25)] 
+        self.dl_btn.bind(on_release=lambda x: webbrowser.open(SITE_URL))
+        self.dl_btn.opacity = 0
+        self.dl_btn.disabled = True
+        self.main_layout.add_widget(self.dl_btn)
 
     def show_changelog(self, instance):
         content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
@@ -633,7 +647,13 @@ class MainMenuScreen(BackgroundScreen):
             "• Добавлена кнопка (i) с информацией.\n"
             "• Исправлена ошибка, из-за которой создатель комнаты не мог начать игру.\n"
             "• Убран баг с замороженным таймером в дружеских играх.\n"
-            "• Штраф теперь снимается, даже если комната уже удалена.\n"
+            "• Штраф теперь снимается, даже если комната уже удалена.\n\n"
+            "[b]Обновление 3[/b]\n"
+            "• Убран штраф за выход из дружеской игры (онлайн по коду).\n"
+            "• Исправлен баг, когда соперник не получал победу, если игрок выходил из комнаты.\n"
+            "• Уведомления больше не спамят при каждом заходе в меню (сохраняются в кэш).\n"
+            "• В уведомления возвращена кнопка скачивания новой версии.\n"
+            "• Добавлена умная кнопка (▶) - появляется только если версия устарела.\n"
         )
         
         lbl = Label(text=log_text, markup=True, halign="left", valign="top", font_size=dp(15), size_hint_y=None)
@@ -675,6 +695,22 @@ class MainMenuScreen(BackgroundScreen):
             if app.current_user:
                 UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success, on_error=sync_fail, on_failure=sync_fail)
             self.check_developer_notification()
+            
+            # ПРОВЕРКА ВЕРСИИ ДЛЯ КНОПКИ [ ▶ ]
+            def version_success(req, result):
+                if result.get('version') != GAME_VERSION:
+                    self.dl_btn.opacity = 1
+                    self.dl_btn.disabled = False
+                else:
+                    self.dl_btn.opacity = 0
+                    self.dl_btn.disabled = True
+                    
+            def version_fail(req, err):
+                self.dl_btn.opacity = 0
+                self.dl_btn.disabled = True
+                
+            UrlRequest(f"{SERVER_URL}/get_version", on_success=version_success, on_failure=version_fail, on_error=version_fail)
+
         app.play_music()
 
     def show_admin_panel(self, instance):
@@ -690,7 +726,10 @@ class MainMenuScreen(BackgroundScreen):
             req_body = json.dumps({"login": "DEV$DEV", "password": "AKS.2GmOZx#Z", "message": msg})
             def on_success(req, res):
                 popup.dismiss()
-                App.get_running_app().last_seen_notification = None
+                path = os.path.join(App.get_running_app().user_data_dir, 'last_notif.txt')
+                if os.path.exists(path):
+                    try: os.remove(path)
+                    except: pass
                 Popup(title="Успех", content=Label(text="Уведомление разослано!"), size_hint=(0.8, 0.3)).open()
             UrlRequest(f"{SERVER_URL}/admin/send_update", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success)
 
@@ -711,27 +750,43 @@ class MainMenuScreen(BackgroundScreen):
         popup.open()
 
     def check_developer_notification(self):
+        app = App.get_running_app()
+        last_notif_path = os.path.join(app.user_data_dir, 'last_notif.txt')
+        
+        last_seen = ""
+        if os.path.exists(last_notif_path):
+            try:
+                with open(last_notif_path, 'r', encoding='utf-8') as f:
+                    last_seen = f.read().strip()
+            except: pass
+
         def on_success(req, result):
-            app = App.get_running_app()
             if result and result.get('active'):
                 msg = result.get('message', '')
-                if msg and msg != app.last_seen_notification:
-                    app.last_seen_notification = msg
+                if msg and msg != last_seen:
+                    try:
+                        with open(last_notif_path, 'w', encoding='utf-8') as f:
+                            f.write(msg)
+                    except: pass
+                    
                     content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(10))
                     notif_lbl = Label(text=msg, halign="center", font_size=dp(18))
                     notif_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
                     content.add_widget(notif_lbl)
                     
                     btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
+                    
                     btn_old = RoundedButton(text="Играть на старой", background_color=(0.3, 0.3, 0.3, 1))
                     btn_old.bind(on_release=lambda x: popup.dismiss())
                     btn_layout.add_widget(btn_old)
+                    
                     btn_new = RoundedButton(text="Скачать новую", background_color=(0.2, 0.6, 0.2, 1))
                     def open_site(instance):
                         popup.dismiss()
                         webbrowser.open(SITE_URL) 
                     btn_new.bind(on_release=open_site)
                     btn_layout.add_widget(btn_new)
+                    
                     content.add_widget(btn_layout)
                     popup = Popup(title="Обновление!", content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
                     popup.open()
@@ -1136,18 +1191,20 @@ class GameScreen(Screen):
                 if app.is_ranked:
                     self.reset_timer()
         def on_fail(req, error):
-            if req.resp_status == 404:
+            if getattr(req, 'resp_status', None) == 404:
                 self.stop_polling()
                 self.stop_timer()
+                if self.game_over_triggered: return
                 self.game_over_triggered = True
+                
                 def sync_success(r, res):
                     app.player_elo = res.get('elo', app.player_elo)
                     app.save_user_data()
                     self.show_end_popup("ПОБЕДА!", "Соперник покинул игру.\nВам засчитана победа!\n\nВаш ЭЛО: " + str(app.player_elo))
                 def sync_err(r, e):
-                    self.show_end_popup("ПОБЕДА!", "Соперник покинул игру.\nВам засчитана победа!\n\n(Не удалось синхронизировать ЭЛО)")
+                    self.show_end_popup("ПОБЕДА!", "Соперник покинул игру.\nВам засчитана победа!")
                 UrlRequest(f"{SERVER_URL}/sync_elo/{app.current_user}", on_success=sync_success, on_failure=sync_err, on_error=sync_err)
-        UrlRequest(f"{SERVER_URL}/get_move/{app.online_room_id}", on_success=on_success, on_error=on_fail, on_failure=lambda r, e: None)
+        UrlRequest(f"{SERVER_URL}/get_move/{app.online_room_id}", on_success=on_success, on_error=on_fail, on_failure=on_fail)
 
     def start_timer(self):
         self.stop_timer()
@@ -1302,7 +1359,7 @@ class GameScreen(Screen):
 
     def go_to_menu(self, instance):
         app = App.get_running_app()
-        if (app.is_ranked or app.is_online) and game_status(self.state) is None:
+        if app.is_ranked and game_status(self.state) is None:
             self.show_exit_warning() 
         else:
             self.stop_timer()
@@ -1360,7 +1417,11 @@ class GameScreen(Screen):
         self.exit_to_menu()
 
     def exit_to_menu(self):
-        App.get_running_app().bot_gen += 1
+        app = App.get_running_app()
+        if app.is_online and app.online_room_id:
+            UrlRequest(f"{SERVER_URL}/leave_match", req_body=json.dumps({"login": app.current_user}), req_headers={'Content-Type': 'application/json'})
+        
+        app.bot_gen += 1
         self.bot_thinking = False
         self.stop_polling()
         self.stop_timer()
