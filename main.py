@@ -39,7 +39,7 @@ SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
 
 # ТЕКУЩАЯ ВЕРСИЯ ИГРЫ
-GAME_VERSION = "1.4"
+GAME_VERSION = "1.4.1"
 
 # ================== КАСТОМНЫЕ ЭЛЕМЕНТЫ UI ==================
 
