@@ -38,10 +38,10 @@ jobs:
         path: |
           ~/.buildozer
           .buildozer
-        # СБРОС КЭША: ключ изменен на v7
-        key: ${{ runner.os }}-buildozer-v7-${{ hashFiles('buildozer.spec') }}
+        # СБРОС КЭША НА V9
+        key: ${{ runner.os }}-buildozer-v9-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
-          ${{ runner.os }}-buildozer-v7-
+          ${{ runner.os }}-buildozer-v9-
 
     - name: Build APK
       run: |
