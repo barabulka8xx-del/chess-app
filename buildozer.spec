@@ -10,11 +10,7 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# УБИРАЕМ жесткий Python 3.11.5, оставляем просто python3
-# И оставляем Cython, который он просит
 requirements = python3, kivy==2.3.0, cython==0.29.36
-
-# УДАЛЯЕМ строку p4a.branch = master (она и притащила Python 3.14)
 
 orientation = portrait
 fullscreen = 0
