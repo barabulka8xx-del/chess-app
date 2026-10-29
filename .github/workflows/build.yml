@@ -33,13 +33,12 @@ jobs:
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
     - name: Restore Keystore
-      # Убрали условие if, теперь просто пытаемся создать файл. Если секрета нет, создастся пустой.
       run: |
         if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
           echo "Keystore created."
         else
-          echo "No keystore secret found."
+          echo "No keystore secret found. Building debug."
         fi
 
     - name: Cache Buildozer
@@ -59,7 +58,6 @@ jobs:
         P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
         P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        # Проверяем, создался ли файл ключа (размер больше 0 байт)
         if [ -s "release.keystore" ]; then
           echo "Keystore найден! Запускаем сборку RELEASE..."
           buildozer -v android release
