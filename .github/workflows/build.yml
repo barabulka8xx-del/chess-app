@@ -33,10 +33,14 @@ jobs:
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
     - name: Restore Keystore
-      # Восстанавливаем keystore из секретов GitHub (если он там есть)
-      if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      # Убрали условие if, теперь просто пытаемся создать файл. Если секрета нет, создастся пустой.
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+          echo "Keystore created."
+        else
+          echo "No keystore secret found."
+        fi
 
     - name: Cache Buildozer
       uses: actions/cache@v4
@@ -49,14 +53,14 @@ jobs:
           ${{ runner.os }}-buildozer-
 
     - name: Build APK
-      # Если keystore найден — собираем release, иначе debug
       env:
         P4A_RELEASE_KEYSTORE: ${{ github.workspace }}/release.keystore
         P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
         P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
         P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        if [ -f "release.keystore" ]; then
+        # Проверяем, создался ли файл ключа (размер больше 0 байт)
+        if [ -s "release.keystore" ]; then
           echo "Keystore найден! Запускаем сборку RELEASE..."
           buildozer -v android release
         else
