@@ -13,10 +13,11 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Set up Python 3.10
+    # Понижаем Python до 3.9 для стабильной сборки pyjnius
+    - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.9'
 
     - name: Install system dependencies
       run: |
@@ -50,6 +51,10 @@ jobs:
         key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
+
+    # Очистка перед сборкой, чтобы сбросить старые ошибки
+    - name: Clean Buildozer
+      run: buildozer android clean
 
     - name: Build APK
       env:
