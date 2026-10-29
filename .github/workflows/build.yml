@@ -3,8 +3,7 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    # МАГИЧЕСКИЙ ФИКС: используем старую Ubuntu, где Kivy собирается идеально
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
 
@@ -14,10 +13,11 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Set up Python 3.10
+    # Понижаем Python до 3.9 для стабильности
+    - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.9'
 
     - name: Install system dependencies
       run: |
