@@ -16,12 +16,4 @@ orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
 android.accept_sdk_license = True
-
-# ИСПОЛЬЗУЕМ СТАБИЛЬНЫЕ NDK 23B и API 31
-android.api = 31
-android.minapi = 24
-android.ndk = 23b
-android.ndk_api = 21
-
-android.release_artifact = apk
 android.permissions = INTERNET
