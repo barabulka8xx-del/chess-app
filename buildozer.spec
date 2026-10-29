@@ -10,8 +10,8 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# Жестко фиксируем версию pyjnius, чтобы не было конфликтов
-requirements = python3, kivy==2.3.0, pyjnius==1.4.0
+# pyjnius>=1.5.0 лучше совместим с NDK
+requirements = python3, kivy==2.3.0, pyjnius>=1.5.0
 
 orientation = portrait
 fullscreen = 0
