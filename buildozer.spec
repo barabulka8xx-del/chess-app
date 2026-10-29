@@ -10,7 +10,8 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-requirements = python3, kivy==2.3.0
+# Добавлен pyjnius для работы вибрации
+requirements = python3, kivy==2.3.0, pyjnius
 
 orientation = portrait
 fullscreen = 0
@@ -20,8 +21,7 @@ android.api = 33
 android.minapi = 24
 android.ndk = 25b
 
-# Формат сборки для релиза (APK, а не AAB)
 android.release_artifact = apk
 
-# ВАЖНО: Разрешение на выход в интернет для онлайна
-android.permissions = INTERNET
+# Добавлено разрешение VIBRATE
+android.permissions = INTERNET, VIBRATE
