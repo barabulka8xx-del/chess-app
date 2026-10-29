@@ -10,8 +10,8 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# pyjnius>=1.5.0 лучше совместим с NDK
-requirements = python3, kivy==2.3.0, pyjnius>=1.5.0
+# Убрали pyjnius для стабильности
+requirements = python3, kivy==2.3.0
 
 orientation = portrait
 fullscreen = 0
@@ -23,6 +23,4 @@ android.ndk = 25b
 android.ndk_api = 21
 
 android.release_artifact = apk
-
-# Разрешение на интернет и вибрацию
 android.permissions = INTERNET, VIBRATE
