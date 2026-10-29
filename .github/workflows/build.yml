@@ -10,10 +10,8 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build APK
-      env:
-        BUILDOZER_WARN_ON_ROOT: "0" # Отключаем проверку на root
       run: |
-        buildozer -v android debug
+        echo "y" | buildozer -v android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
