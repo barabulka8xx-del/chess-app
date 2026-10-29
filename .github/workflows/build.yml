@@ -13,7 +13,6 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    # Понижаем Python до 3.9 для стабильности
     - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
@@ -38,10 +37,4 @@ jobs:
         GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
         JAVA_OPTS: "-Xmx2g"
       run: |
-        buildozer -v android debug --no-parallel
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: my-chess-apk
-        path: bin/*.apk
+        buildozer -v android debug
