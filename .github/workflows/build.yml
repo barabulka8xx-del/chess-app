@@ -32,6 +32,12 @@ jobs:
       run: |
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
+    - name: Restore Keystore
+      # Восстанавливаем keystore из секретов GitHub (если он там есть)
+      if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
@@ -43,8 +49,20 @@ jobs:
           ${{ runner.os }}-buildozer-
 
     - name: Build APK
+      # Если keystore найден — собираем release, иначе debug
+      env:
+        P4A_RELEASE_KEYSTORE: ${{ github.workspace }}/release.keystore
+        P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
+        P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
+        P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        buildozer -v android debug
+        if [ -f "release.keystore" ]; then
+          echo "Keystore найден! Запускаем сборку RELEASE..."
+          buildozer -v android release
+        else
+          echo "Keystore НЕ найден! Запускаем сборку DEBUG..."
+          buildozer -v android debug
+        fi
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
