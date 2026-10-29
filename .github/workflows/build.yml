@@ -36,6 +36,7 @@ jobs:
       env:
         GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
         JAVA_OPTS: "-Xmx2g"
+        MAKEFLAGS: "-j1"
       run: |
         buildozer -v android debug
 
