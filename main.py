@@ -1354,14 +1354,18 @@ class ChessApp(App):
 
     def vibrate(self):
         try:
-            from jnius import autoclass
-            Context = autoclass('android.content.Context')
+            from jnius import autoclass, cast
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            vibrator = PythonActivity.mActivity.getSystemService(Context.VIBRATOR_SERVICE)
+            activity = PythonActivity.mActivity
+            Context = autoclass('android.content.Context')
+            vibrator_service = activity.getSystemService(Context.VIBRATOR_SERVICE)
+            vibrator = cast("android.os.Vibrator", vibrator_service)
+            
             if vibrator.hasVibrator():
-                vibrator.vibrate(50) # 50 миллисекунд
-        except:
-            pass # На ПК вибрации нет
+                VibrationEffect = autoclass("android.os.VibrationEffect")
+                vibrator.vibrate(VibrationEffect.createOneShot(50, -1))
+        except Exception:
+            pass # На ПК или при ошибке просто пропускаем
 
     def init_audio(self):
         path = "beep.wav"
