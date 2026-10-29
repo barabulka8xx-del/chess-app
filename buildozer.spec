@@ -16,11 +16,9 @@ orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
 android.accept_sdk_license = True
-android.api = 31
+android.api = 33
 android.minapi = 24
-android.ndk = 23b
-android.ndk_api = 21
+android.ndk = 25b
 
 android.release_artifact = apk
-# Разрешения для интернета и вибрации
-android.permissions = INTERNET, VIBRATE
+android.permissions = INTERNET
