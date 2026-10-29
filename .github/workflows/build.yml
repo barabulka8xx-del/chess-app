@@ -32,9 +32,13 @@ jobs:
       run: |
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
+    # Убираем кэш, чтобы не тянуть старые ошибки
     - name: Build APK
+      env:
+        GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
+        JAVA_OPTS: "-Xmx2g"
       run: |
-        buildozer -v android debug
+        buildozer -v android debug --no-parallel
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
