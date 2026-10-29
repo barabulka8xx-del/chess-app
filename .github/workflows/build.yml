@@ -13,11 +13,10 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    # Понижаем Python до 3.9 для стабильной сборки pyjnius
-    - name: Set up Python 3.9
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9'
+        python-version: '3.10'
 
     - name: Install system dependencies
       run: |
@@ -33,15 +32,6 @@ jobs:
       run: |
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
-    - name: Restore Keystore
-      run: |
-        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
-          echo "Keystore created."
-        else
-          echo "No keystore secret found. Building debug."
-        fi
-
     - name: Cache Buildozer
       uses: actions/cache@v4
       with:
@@ -52,24 +42,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-buildozer-
 
-    # Очистка перед сборкой, чтобы сбросить старые ошибки
-    - name: Clean Buildozer
-      run: buildozer android clean
-
     - name: Build APK
-      env:
-        P4A_RELEASE_KEYSTORE: ${{ github.workspace }}/release.keystore
-        P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
-        P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
-        P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        if [ -s "release.keystore" ]; then
-          echo "Keystore найден! Запускаем сборку RELEASE..."
-          buildozer -v android release
-        else
-          echo "Keystore НЕ найден! Запускаем сборку DEBUG..."
-          buildozer -v android debug
-        fi
+        buildozer -v android debug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
