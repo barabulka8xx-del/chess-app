@@ -3,7 +3,8 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    # МАГИЧЕСКИЙ ФИКС: используем старую Ubuntu, где Kivy собирается идеально
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v4
 
@@ -32,7 +33,6 @@ jobs:
       run: |
         curl -L -o DejaVuSans.ttf https://cdn.jsdelivr.net/gh/matplotlib/matplotlib@main/lib/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf
 
-    # Убираем кэш, чтобы не тянуть старые ошибки
     - name: Build APK
       env:
         GRADLE_OPTS: "-Xmx2g -Dorg.gradle.daemon=false"
