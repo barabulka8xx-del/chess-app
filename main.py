@@ -64,7 +64,7 @@ LOCALES = {
         "menu_title": "Chess", "elo": "Your ELO:", "2p": "2 Players", "bot": "Play vs Bot",
         "ranked": "Ranked Match", "settings": "Settings", "logout": "Logout",
         "menu": "Menu", "undo": "Undo", "no_undo": "No Undo",
-        "turn_w": "White's turn", "turn_b": "Black's turn", "check": "CHECK!",
+        "turn_w": "White turn", "turn_b": "Black turn", "check": "CHECK!",
         "thinking": "Bot is thinking...", "time": "Time:", "time_out": "Left:",
         "promo": "Choose piece:", "back": "Back", "diff_easy": "Easy",
         "diff_med": "Medium", "diff_hard": "Hard", "difficulty": "Difficulty",
