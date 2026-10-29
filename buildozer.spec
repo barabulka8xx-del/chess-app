@@ -1,13 +1,13 @@
 [app]
 title = Chess By Lord
-package.name = chessbylord
-package.domain = ru.lord
+package.name = mychess
+package.domain = org.test
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,wav,ttf,ogg,mp3
-version = 1.4.2
-android.numeric_version = 142
+version = 1.0
 
 icon.filename = icon.png
+
 presplash.filename = icon.png
 
 requirements = python3, kivy==2.3.0
@@ -20,5 +20,5 @@ android.api = 33
 android.minapi = 24
 android.ndk = 25b
 
-android.release_artifact = apk
+# ВАЖНО: Разрешение на выход в интернет для онлайна
 android.permissions = INTERNET
