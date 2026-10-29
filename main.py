@@ -563,11 +563,11 @@ class MainMenuScreen(BackgroundScreen):
         ui_layout.add_widget(self.admin_btn)
         
         btn_layout = BoxLayout(size_hint_y=0.1, spacing=dp(10))
-        self.btn_settings = RoundedButton(text="⚙️", font_size=dp(20), background_color=(0.4, 0.4, 0.4, 1))
+        self.btn_settings = RoundedButton(text="Настройки", font_size=dp(16), background_color=(0.4, 0.4, 0.4, 1))
         self.btn_settings.bind(on_release=lambda x: setattr(self.manager, 'current', 'settings'))
         btn_layout.add_widget(self.btn_settings)
         
-        self.btn_logout = RoundedButton(text="Выйти", font_size=dp(14), background_color=(0.5, 0.2, 0.2, 1))
+        self.btn_logout = RoundedButton(text="Выйти", font_size=dp(16), background_color=(0.5, 0.2, 0.2, 1))
         self.btn_logout.bind(on_release=self.logout)
         btn_layout.add_widget(self.btn_logout)
         ui_layout.add_widget(btn_layout)
@@ -576,11 +576,13 @@ class MainMenuScreen(BackgroundScreen):
         
         self.main_layout.add_widget(ui_layout)
 
-        self.info_btn = RoundedButton(text="(i)", font_size=dp(20), bold=True, size_hint=(None, None), size=(dp(50), dp(50)), pos_hint={'right': 0.95, 'y': 0.05}, background_color=(0.2, 0.5, 0.8, 1))
+        # Перенесли кнопку (i) наверх вправо
+        self.info_btn = RoundedButton(text="(i)", font_size=dp(20), bold=True, size_hint=(None, None), size=(dp(45), dp(45)), pos_hint={'right': 0.95, 'top': 0.95}, background_color=(0.2, 0.5, 0.8, 1))
         self.info_btn.bind(on_release=self.show_changelog)
         self.main_layout.add_widget(self.info_btn)
 
-        self.dl_btn = RoundedButton(text="▶", font_size=dp(22), font_name='ChessFont', size_hint=(None, None), size=(dp(50), dp(50)), pos_hint={'right': 0.78, 'y': 0.05}, background_color=(0.8, 0.2, 0.8, 1))
+        # Перенесли кнопку обновления (▶) наверх вправо, рядом с (i)
+        self.dl_btn = RoundedButton(text="▶", font_size=dp(20), font_name='ChessFont', size_hint=(None, None), size=(dp(45), dp(45)), pos_hint={'right': 0.80, 'top': 0.95}, background_color=(0.8, 0.2, 0.8, 1))
         self.dl_btn.bind(on_release=lambda x: webbrowser.open(SITE_URL)) 
         self.dl_btn.opacity = 0
         self.dl_btn.disabled = True
