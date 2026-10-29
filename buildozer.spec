@@ -10,11 +10,11 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# ЖЕСТКО ФИКСИРУЕМ ИДЕАЛЬНУЮ СВЯЗКУ
-requirements = python3==3.11.5, kivy==2.3.0, cython==0.29.36
+# УБИРАЕМ жесткий Python 3.11.5, оставляем просто python3
+# И оставляем Cython, который он просит
+requirements = python3, kivy==2.3.0, cython==0.29.36
 
-# Указываем актуальную ветку сборщика
-p4a.branch = master
+# УДАЛЯЕМ строку p4a.branch = master (она и притащила Python 3.14)
 
 orientation = portrait
 fullscreen = 0
@@ -22,7 +22,6 @@ android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.permissions = INTERNET
 
-# Оставляем NDK 25b
 android.api = 31
 android.minapi = 24
 android.ndk = 25b
