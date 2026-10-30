@@ -10,8 +10,11 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# ЖЕСТКО ФИКСИРУЕМ PYTHON 3.10.8, ЧТОБЫ НАЙТИ PYJNIUS
-requirements = python3==3.10.8, kivy==2.3.0, cython==0.29.36
+# Оставляем просто python3, стабильную версию выберет сам p4a
+requirements = python3, kivy==2.3.0
+
+# ФИКСИРУЕМ СТАБИЛЬНУЮ ВЕТКУ СБОРЩИКА (где нет Python 3.14)
+p4a.branch = v2023.09.13
 
 orientation = portrait
 fullscreen = 0
