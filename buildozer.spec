@@ -10,11 +10,10 @@ android.numeric_version = 142
 icon.filename = icon.png
 presplash.filename = icon.png
 
-# Оставляем просто python3, стабильную версию выберет сам p4a
 requirements = python3, kivy==2.3.0
 
-# ФИКСИРУЕМ СТАБИЛЬНУЮ ВЕТКУ СБОРЩИКА (где нет Python 3.14)
-p4a.branch = v2023.09.13
+# ИСПРАВЛЕНО: используем существующий стабильный тег
+p4a.branch = v2023.09.16
 
 orientation = portrait
 fullscreen = 0
