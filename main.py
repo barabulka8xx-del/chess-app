@@ -34,7 +34,7 @@ LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
-GAME_VERSION = "1.4.2"
+GAME_VERSION = "1.4.3"
 
 # СЛОВАРИ ПЕРЕВОДОВ
 LOCALES = {
@@ -59,7 +59,11 @@ LOCALES = {
         "fill_fields": "Заполните все поля!", "banned": "ВЫ ЗАБАНЕНЫ!",
         "wrong_pass": "Неверный пароль", "game_over": "Игра окончена.",
         "opp_left": "Соперник покинул игру.", "time_out_msg": "Время вышло!",
-        "promo_title": "Превращение", "attention": "Внимание!"
+        "promo_title": "Превращение", "attention": "Внимание!",
+        "profile": "Профиль", "change_av": "Сменить аватар", 
+        "matches": "Матчей:", "choose_av": "Выберите аватар",
+        "title_novice": "Новичок", "title_amateur": "Любитель", "title_pro": "Профи", "title_gm": "Гроссмейстер",
+        "quick_chat": "Быстрые фразы", "msg_good_move": "Хороший ход!", "msg_good_luck": "Удачи!", "msg_gg": "GG", "msg_resign": "Сдаюсь"
     },
     "en": {
         "login_title": "Login", "reg_title": "Registration",
@@ -82,7 +86,11 @@ LOCALES = {
         "fill_fields": "Fill in all fields!", "banned": "YOU ARE BANNED!",
         "wrong_pass": "Wrong password", "game_over": "Game over.",
         "opp_left": "Opponent left the game.", "time_out_msg": "Time is up!",
-        "promo_title": "Promotion", "attention": "Attention!"
+        "promo_title": "Promotion", "attention": "Attention!",
+        "profile": "Profile", "change_av": "Change Avatar", 
+        "matches": "Matches:", "choose_av": "Choose Avatar",
+        "title_novice": "Novice", "title_amateur": "Amateur", "title_pro": "Pro", "title_gm": "Grandmaster",
+        "quick_chat": "Quick Chat", "msg_good_move": "Good move!", "msg_good_luck": "Good luck!", "msg_gg": "GG", "msg_resign": "I resign"
     }
 }
 
@@ -384,7 +392,7 @@ def get_bot_move(s, difficulty):
         if val < best_val: 
             best_val = val; best_move = m
     return best_move
-    # ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
+  # ================== ЭКРАНЫ ПРИЛОЖЕНИЯ ==================
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
@@ -615,6 +623,10 @@ class MainMenuScreen(BackgroundScreen):
         self.btn_settings.bind(on_release=lambda x: setattr(self.manager, 'current', 'settings'))
         btn_layout.add_widget(self.btn_settings)
         
+        self.btn_profile = RoundedButton(text="👤", font_size=dp(20), background_color=(0.2, 0.6, 0.8, 1))
+        self.btn_profile.bind(on_release=lambda x: setattr(self.manager, 'current', 'profile'))
+        btn_layout.add_widget(self.btn_profile)
+        
         self.btn_logout = RoundedButton(text="", font_size=dp(16), background_color=(0.5, 0.2, 0.2, 1))
         self.btn_logout.bind(on_release=self.logout)
         btn_layout.add_widget(self.btn_logout)
@@ -642,11 +654,11 @@ class MainMenuScreen(BackgroundScreen):
         self.btn_ranked.text = app.t("ranked")
         self.btn_logout.text = app.t("logout")
         self.btn_settings.text = app.t("settings")
+        self.user_label.text = f"{app.current_user} {app.avatar}"
 
     def on_pre_enter(self, *args):
         app = App.get_running_app()
         self.update_translations()
-        self.user_label.text = f"{app.current_user}"
         
         if app.current_user == "DEV$DEV":
             self.admin_btn.opacity = 1
@@ -723,6 +735,11 @@ class MainMenuScreen(BackgroundScreen):
         layout.add_widget(Label(text=f"[b][color=f1c40f]{app.t('changelog')}[/color][/b]", markup=True, font_size=dp(22), size_hint_y=None, height=dp(50)))
         
         log_text = (
+            "[b]Обновление 8[/b]\n"
+            "• Добавлен профиль игрока (аватарки и звания).\n"
+            "• Добавлены быстрые фразы в игре (чат).\n"
+            "• Добавлен эффект взрыва и тряски при взятии фигуры.\n"
+            "• Добавлен отдельный звук взятия фигуры.\n\n"
             "[b]Обновление 7[/b]\n"
             "• Глобальное обновление интерфейса!\n"
             "• Добавлены настройки: выбор языка (RU/EN) и громкость музыки.\n"
@@ -801,6 +818,75 @@ class MainMenuScreen(BackgroundScreen):
         btn_send = RoundedButton(text="Send", background_color=(0.2, 0.6, 0.2, 1))
         btn_send.bind(on_release=send_notification)
         btn_layout.add_widget(btn_send)
+        content.add_widget(btn_layout)
+        popup.open()
+
+class ProfileScreen(BackgroundScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=dp(30), spacing=dp(15), size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        
+        self.title_lbl = Label(text="", font_size=dp(30), bold=True, size_hint_y=0.1)
+        layout.add_widget(self.title_lbl)
+        
+        self.avatar_lbl = Label(text="👤", font_size=dp(80), size_hint_y=0.25)
+        layout.add_widget(self.avatar_lbl)
+        
+        self.btn_change_av = RoundedButton(text="", font_size=dp(16), size_hint_y=0.1, background_color=(0.2, 0.6, 0.8, 1))
+        self.btn_change_av.bind(on_release=self.show_avatars)
+        layout.add_widget(self.btn_change_av)
+        
+        self.stats_lbl = Label(text="", font_size=dp(16), halign="center", size_hint_y=0.25, color=(0.8, 0.8, 0.8, 1))
+        self.stats_lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+        layout.add_widget(self.stats_lbl)
+        
+        btn_back = RoundedButton(text="", font_size=dp(20), size_hint_y=0.12, background_color=(0.5, 0.2, 0.2, 1))
+        btn_back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main_menu'))
+        layout.add_widget(btn_back)
+        self.btn_back = btn_back
+        self.main_layout.add_widget(layout)
+
+    def on_pre_enter(self, *args):
+        app = App.get_running_app()
+        self.title_lbl.text = app.t("profile")
+        self.btn_change_av.text = app.t("change_av")
+        self.btn_back.text = app.t("back")
+        self.avatar_lbl.text = app.avatar
+        
+        if not app.is_offline:
+            def on_success(req, result):
+                matches = len(result.get('history', []))
+                elo = result.get('elo', app.player_elo)
+                
+                if elo < 400: title = app.t("title_novice")
+                elif elo < 800: title = app.t("title_amateur")
+                elif elo < 1200: title = app.t("title_pro")
+                else: title = app.t("title_gm")
+                
+                self.stats_lbl.text = f"{title}\nELO: {elo}\n{app.t('matches')} {matches}"
+            UrlRequest(f"{SERVER_URL}/admin/get_player_details/{app.current_user}", on_success=on_success)
+        else:
+            self.stats_lbl.text = "Offline"
+
+    def show_avatars(self, instance):
+        app = App.get_running_app()
+        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+        content.add_widget(Label(text=app.t("choose_av")))
+        
+        btn_layout = BoxLayout(spacing=dp(10))
+        avatars = ["👤", "🦁", "🐺", "🤖", "👑"]
+        popup = Popup(title=app.t("choose_av"), content=content, size_hint=(0.8, 0.4))
+        
+        for av in avatars:
+            btn = RoundedButton(text=av, font_size=dp(40), background_color=(0.3, 0.3, 0.3, 1))
+            def set_av(inst, a=av):
+                app.avatar = a
+                app.save_settings()
+                self.avatar_lbl.text = a
+                popup.dismiss()
+            btn.bind(on_release=set_av)
+            btn_layout.add_widget(btn)
+        
         content.add_widget(btn_layout)
         popup.open()
 
@@ -975,6 +1061,7 @@ class RankedMenuScreen(BackgroundScreen):
 
     def do_search(self, app):
         if not self.is_searching: return
+        
         def on_success(req, result):
             if not self.is_searching: return
             if result.get('status') == 'matched':
@@ -990,8 +1077,31 @@ class RankedMenuScreen(BackgroundScreen):
                 self.manager.current = 'game'
             else:
                 Clock.schedule_once(lambda dt: self.do_search(app), 2)
+
+        def on_error(req, error):
+            self.is_searching = False
+            if hasattr(self, 'waiting_popup') and self.waiting_popup:
+                self.waiting_popup.dismiss()
+                
+            if getattr(req, 'resp_status', None) == 403:
+                content = BoxLayout(orientation='vertical', spacing=dp(15), padding=dp(15))
+                lbl = Label(text=app.t("upd_msg"), halign="center", font_size=dp(16))
+                lbl.bind(size=lambda instance, value: setattr(instance, 'text_size', (value[0], None)))
+                content.add_widget(lbl)
+                
+                btn = RoundedButton(text=app.t("upd_btn"), size_hint_y=None, height=dp(50), background_color=(0.2, 0.6, 0.2, 1))
+                def open_site(instance):
+                    popup.dismiss()
+                    webbrowser.open(SITE_URL) 
+                btn.bind(on_release=open_site)
+                content.add_widget(btn)
+                popup = Popup(title=app.t("upd_title"), content=content, size_hint=(0.85, 0.4), auto_dismiss=False)
+                popup.open()
+            else:
+                Popup(title="Error", content=Label(text="Server unavailable"), size_hint=(0.8, 0.3)).open()
+
         req_body = json.dumps({"login": app.current_user, "elo": app.player_elo, "version": GAME_VERSION})
-        UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_failure=lambda r, e: Clock.schedule_once(lambda dt: self.do_search(app), 3))
+        UrlRequest(f"{SERVER_URL}/find_match", req_body=req_body, req_headers={'Content-Type': 'application/json'}, on_success=on_success, on_error=on_error, on_failure=lambda r, e: Clock.schedule_once(lambda dt: self.do_search(app), 3))
 
     def start_ranked_bot(self, instance):
         app = App.get_running_app()
@@ -1066,6 +1176,10 @@ class GameScreen(Screen):
         self.timer_label = Label(text="", font_size=dp(18), bold=True, color=(1, 0.5, 0.5, 1))
         top_bar.add_widget(self.timer_label)
         
+        self.btn_chat = RoundedButton(text="💬", font_size=dp(16), background_color=(0.2, 0.5, 0.8, 1))
+        self.btn_chat.bind(on_release=self.show_quick_chat)
+        top_bar.add_widget(self.btn_chat)
+        
         self.btn_undo = RoundedButton(text="", font_size=dp(16), background_color=(0.3, 0.3, 0.3, 1))
         self.btn_undo.bind(on_release=self.undo_move)
         top_bar.add_widget(self.btn_undo)
@@ -1125,7 +1239,13 @@ class GameScreen(Screen):
         app = App.get_running_app()
         if not app.is_online or not app.online_room_id: return
         def on_success(req, result):
-            if not result or not result.get('board_data'): return
+            if not result: return
+            
+            msg = result.get('quick_message')
+            if msg:
+                self.display_chat_bubble(msg)
+                
+            if not result.get('board_data'): return
             new_state = json.loads(result['board_data'])
             if self.state['turn'] != new_state['turn'] or self.state['board'] != new_state['board']:
                 self.history.append((copy_state(self.state), self.last_move))
@@ -1275,15 +1395,53 @@ class GameScreen(Screen):
         self.popup.dismiss()
         self.make_move((m[0], m[1], m[2], m[3], pr, m[5]))
 
+    def shake_board(self):
+        original_pos = self.board_ui.pos
+        anim = (Animation(x=original_pos[0] + 8, duration=0.05) +
+                Animation(x=original_pos[0] - 8, duration=0.05) +
+                Animation(x=original_pos[0] + 5, duration=0.05) +
+                Animation(x=original_pos[0] - 5, duration=0.05) +
+                Animation(x=original_pos[0], duration=0.05))
+        anim.start(self.board_ui)
+
+    def show_scatter_effect(self, r, c):
+        square = self.board_ui.squares[(r, c)]
+        center_x, center_y = square.to_window(*square.center)
+        start_pos = self.from_window(center_x, center_y)
+        
+        for i in range(15):
+            symbol = "✨" if i % 2 == 0 else "💥"
+            particle = Label(text=symbol, font_size=dp(15), color=(1, 1, 1, 1), size_hint=(None, None), size=(dp(30), dp(30)))
+            particle.center = start_pos
+            self.add_widget(particle)
+            
+            target_x = start_pos[0] + random.randint(-150, 150)
+            target_y = start_pos[1] + random.randint(-150, 150)
+            
+            anim = Animation(center=(target_x, target_y), opacity=0, font_size=dp(5), duration=random.uniform(0.4, 0.8), transition='out_quad')
+            anim.bind(on_complete=lambda *args, w=particle: self.remove_widget(w))
+            anim.start(particle)
+            
+        self.shake_board()
+
     def make_move(self, m):
         self.history.append((copy_state(self.state), self.last_move))
+        
+        captured_piece = self.state['board'][m[2]][m[3]]
+        if captured_piece != '.' or m[5] == 'ep':
+            self.show_scatter_effect(m[2], m[3])
+            
         self.state = apply_move(self.state, m)
         self.last_move = m
         self.selected = None
         self.legal_targets = []
         app = App.get_running_app()
         self.stop_timer()
-        app.play_sound()
+        
+        if captured_piece != '.' or m[5] == 'ep':
+            if app.sound_capture: app.sound_capture.play()
+        else:
+            app.play_sound()
         
         if app.is_online:
             UrlRequest(f"{SERVER_URL}/make_move", req_body=json.dumps({
@@ -1314,17 +1472,70 @@ class GameScreen(Screen):
         if m:
             if m[4]: m = (m[0], m[1], m[2], m[3], 'Q', m[5])
             self.history.append((copy_state(self.state), self.last_move))
+            
+            captured_piece = self.state['board'][m[2]][m[3]]
+            if captured_piece != '.' or m[5] == 'ep':
+                self.show_scatter_effect(m[2], m[3])
+                
             self.state = apply_move(self.state, m)
             self.last_move = m
-            app.play_sound()
+            
+            if captured_piece != '.' or m[5] == 'ep':
+                if app.sound_capture: app.sound_capture.play()
+            else:
+                app.play_sound()
+                
         if app.is_ranked: self.reset_timer()
         self.update_ui()
+
+    def show_quick_chat(self, instance):
+        app = App.get_running_app()
+        content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(10))
+        content.add_widget(Label(text=app.t("quick_chat")))
+        
+        btn_layout = BoxLayout(spacing=dp(10), size_hint_y=None, height=dp(50))
+        popup = Popup(title="", content=content, size_hint=(0.8, 0.4))
+        
+        msgs = [("msg_good_move", "Good move!"), ("msg_good_luck", "Good luck!"), ("msg_gg", "GG"), ("msg_resign", "I resign")]
+        
+        for key, text in msgs:
+            btn = RoundedButton(text=app.t(key), font_size=dp(14), background_color=(0.3, 0.3, 0.3, 1))
+            def send_msg(inst, txt=text):
+                popup.dismiss()
+                self.send_chat_to_server(txt)
+            btn.bind(on_release=send_msg)
+            btn_layout.add_widget(btn)
+            
+        content.add_widget(btn_layout)
+        popup.open()
+
+    def send_chat_to_server(self, text):
+        app = App.get_running_app()
+        if app.is_online and app.online_room_id:
+            req_body = json.dumps({"room_id": app.online_room_id, "message": f"{app.current_user}: {text}"})
+            UrlRequest(f"{SERVER_URL}/send_quick_message", req_body=req_body, req_headers={'Content-Type': 'application/json'})
+        self.display_chat_bubble(f"You: {text}")
+
+    def display_chat_bubble(self, text):
+        bubble = Label(text=text, font_size=dp(16), color=(1, 1, 1, 1), 
+                       size_hint=(None, None), size=(dp(300), dp(50)), 
+                       pos_hint={'center_x': 0.5, 'top': 0.8})
+        bubble.canvas.before.clear()
+        with bubble.canvas.before:
+            Color(0, 0, 0, 0.7)
+            RoundedRectangle(pos=bubble.pos, size=bubble.size, radius=[dp(15)])
+        
+        self.add_widget(bubble)
+        anim = Animation(opacity=0, duration=2.0)
+        anim.bind(on_complete=lambda *args: self.remove_widget(bubble))
+        anim.start(bubble)
 
 class ChessApp(App):
     game_mode = '2p'
     bot_diff = 1
     bot_gen = 0
     sound_move = None
+    sound_capture = None
     bg_music = None
     
     current_user = None
@@ -1339,6 +1550,7 @@ class ChessApp(App):
     
     lang = 'ru' 
     music_volume = 0.3
+    avatar = '👤'
 
     def build(self):
         self.load_settings()
@@ -1347,6 +1559,7 @@ class ChessApp(App):
         sm.add_widget(LoadingScreen(name='loading'))
         sm.add_widget(LoginScreen(name='login'))
         sm.add_widget(MainMenuScreen(name='main_menu'))
+        sm.add_widget(ProfileScreen(name='profile'))
         sm.add_widget(SettingsScreen(name='settings'))
         sm.add_widget(TwoPlayersMenuScreen(name='two_players_menu'))
         sm.add_widget(BotMenuScreen(name='bot_menu'))
@@ -1370,17 +1583,19 @@ class ChessApp(App):
                     data = json.load(f)
                     self.lang = data.get('lang', 'ru')
                     self.music_volume = data.get('volume', 0.3)
+                    self.avatar = data.get('avatar', '👤')
             except: pass
 
     def save_settings(self):
         path = os.path.join(self.user_data_dir, 'settings.json')
         try:
             with open(path, 'w') as f:
-                json.dump({'lang': self.lang, 'volume': self.music_volume}, f)
+                json.dump({'lang': self.lang, 'volume': self.music_volume, 'avatar': self.avatar}, f)
         except: pass
 
     def init_audio(self):
         path = "beep.wav"
+        path2 = "capture.wav"
         if not os.path.exists(path):
             try:
                 sample_rate = 16000
@@ -1396,8 +1611,26 @@ class ChessApp(App):
                     wf.writeframes(bytes(frames))
                 with open(path, 'wb') as f: f.write(buf.getvalue())
             except: pass
+            
+        if not os.path.exists(path2):
+            try:
+                sample_rate = 16000
+                n = int(sample_rate * 0.15)
+                buf = io.BytesIO()
+                with wave.open(buf, 'wb') as wf:
+                    wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(sample_rate)
+                    frames = bytearray(n * 2)
+                    for i in range(n):
+                        env = min(1.0, i / 300) * min(1.0, (n - i) / 300)
+                        v = int(32767 * 0.4 * env * math.sin(2 * math.pi * 150 * i / sample_rate))
+                        struct.pack_into('<h', frames, i * 2, v)
+                    wf.writeframes(bytes(frames))
+                with open(path2, 'wb') as f: f.write(buf.getvalue())
+            except: pass
+            
         try:
             if os.path.exists(path): self.sound_move = SoundLoader.load(path)
+            if os.path.exists(path2): self.sound_capture = SoundLoader.load(path2)
             self.bg_music = SoundLoader.load('music.ogg')
             if self.bg_music:
                 self.bg_music.loop = True
@@ -1454,4 +1687,4 @@ class ChessApp(App):
         return base
 
 if __name__ == '__main__':
-    ChessApp().run()
+    ChessApp().run()  
