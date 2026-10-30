@@ -34,7 +34,7 @@ LabelBase.register(name='ChessFont', fn_regular='DejaVuSans.ttf')
 
 SERVER_URL = "http://node.waifly.com:27402"
 SITE_URL = "https://barabulka8xx-del.github.io/chess-site/" 
-GAME_VERSION = "1.4.3"
+GAME_VERSION = "1.4.2"
 
 # СЛОВАРИ ПЕРЕВОДОВ
 LOCALES = {
